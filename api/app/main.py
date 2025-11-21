@@ -31,9 +31,9 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 # Load the local sentence-transformers model once at startup
-# Using all-MiniLM-L6-v2 (384-dimensional, primarily English)
-logger.info("Loading sentence-transformers model: all-MiniLM-L6-v2...")
-model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+# Using paraphrase-multilingual-MiniLM-L12-v2 (384-dimensional, 50+ languages including Polish)
+logger.info("Loading sentence-transformers model: paraphrase-multilingual-MiniLM-L12-v2...")
+model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
 logger.info("Model loaded successfully!")
 
 
