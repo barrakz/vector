@@ -14,6 +14,7 @@ from psycopg.types.json import Jsonb
 
 import logging
 from app.db import get_db_connection, init_database
+from app.chunking import chunk_text
 
 # Configure logging
 logging.basicConfig(
@@ -75,11 +76,14 @@ class IngestRequest(BaseModel):
 
 class IngestResponse(BaseModel):
     status: str
-    id: int
+    document_id: int
+    chunks_inserted: int
 
 
 class SearchResult(BaseModel):
-    id: int
+    chunk_id: int
+    document_id: int
+    chunk_index: int
     title: str
     body: str
     metadata: Optional[dict[str, Any]]
@@ -102,11 +106,13 @@ async def root():
 @app.post("/ingest", response_model=IngestResponse)
 async def ingest_document(request: IngestRequest):
     """
-    Ingest a document: generate embedding using LOCAL model and store in PostgreSQL.
+    Ingest a document with RAG-ready chunking: generate embeddings for text chunks and store in PostgreSQL.
     
-    - Uses sentence-transformers to generate embedding from document body
-    - Stores document with embedding in pgvector column (384 dimensions)
-    - Stores metadata as JSONB
+    - Chunks the document body into ~300 word fragments with 50 word overlap
+    - Uses sentence-transformers to generate embedding for each chunk
+    - Stores chunks with embeddings in pgvector (384 dimensions)
+    - Stores document metadata in documents table
+    - Returns document_id and number of chunks created
     """
     try:
         # Connect to database
@@ -124,38 +130,56 @@ async def ingest_document(request: IngestRequest):
             )
             existing = cursor.fetchone()
             if existing:
+                # Count existing chunks for this document
+                cursor.execute(
+                    "SELECT COUNT(*) FROM chunks WHERE document_id = %s;",
+                    (existing[0],)
+                )
+                chunk_count = cursor.fetchone()[0]
+                
                 cursor.close()
                 conn.close()
                 logger.info(f"Document with URL '{request.metadata['url']}' already exists (ID: {existing[0]}). Skipping.")
-                return IngestResponse(status="ok", id=existing[0])
+                return IngestResponse(status="ok", document_id=existing[0], chunks_inserted=chunk_count)
         
-        # Generate embedding using local sentence-transformers model
+        # Insert document record (without body - chunks will contain the text)
         logger.info(f"Ingesting document: '{request.title}' | Metadata: {request.metadata}")
-        embedding = get_embedding(request.body)
-        # print(f"Embedding generated (dimension: {len(embedding)})")
-        
-        # Insert document with embedding
-        # Note: psycopg3 handles the vector type automatically when we pass a list
-        # Wrap metadata in Jsonb for proper JSONB handling
         cursor.execute(
             """
             INSERT INTO documents (title, body, metadata, embedding)
             VALUES (%s, %s, %s, %s)
             RETURNING id;
             """,
-            (request.title, request.body, Jsonb(request.metadata), embedding)
+            (request.title, "", Jsonb(request.metadata), None)  # Empty body, no embedding for document
         )
         
         document_id = cursor.fetchone()[0]
         
-        cursor.close()
-        conn.close()
+        # Chunk the text
+        chunks = chunk_text(request.body, chunk_size=300, overlap=50)
+        logger.info(f"Document split into {len(chunks)} chunks")
+        
+        # Insert each chunk with its embedding
+        chunks_inserted = 0
+        for idx, chunk in enumerate(chunks):
+            # Generate embedding for this chunk
+            chunk_embedding = get_embedding(chunk)
+            
+            # Insert chunk
+            cursor.execute(
+                """
+                INSERT INTO chunks (document_id, chunk_index, title, body, metadata, embedding)
+                VALUES (%s, %s, %s, %s, %s, %s);
+                """,
+                (document_id, idx, request.title, chunk, Jsonb(request.metadata), chunk_embedding)
+            )
+            chunks_inserted += 1
         
         cursor.close()
         conn.close()
         
-        logger.info(f"Document inserted successfully with ID: {document_id}")
-        return IngestResponse(status="ok", id=document_id)
+        logger.info(f"Document inserted successfully with ID: {document_id}, chunks: {chunks_inserted}")
+        return IngestResponse(status="ok", document_id=document_id, chunks_inserted=chunks_inserted)
         
     except Exception as e:
         logger.error(f"Error during ingestion: {e}")
@@ -165,31 +189,37 @@ async def ingest_document(request: IngestRequest):
 @app.get("/search", response_model=SearchResponse)
 async def search_documents(q: str, limit: int = 5):
     """
-    Semantic search: find documents similar to the query using vector similarity.
+    Semantic search on text chunks: find most relevant chunks using vector similarity.
     
     - Generates embedding for the query text using LOCAL model
-    - Searches using L2 distance (embedding <-> query_vector)
-    - Returns most similar documents
+    - Searches chunks table (not documents) using L2 distance
+    - Returns most similar chunks with document context
+    - Perfect for RAG: returns precise, relevant text fragments
     """
     try:
         # Generate embedding for the search query using local model
         logger.info(f"Searching for: '{q}' | Limit: {limit}")
         query_embedding = get_embedding(q)
-        # print(f"Query embedding generated (dimension: {len(query_embedding)})")
         
-        # Connect to database and perform similarity search
+        # Connect to database and perform similarity search on chunks
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Search for similar documents using L2 distance
+        # Search for similar chunks using L2 distance
         # The <-> operator calculates L2 distance between vectors
         # Lower distance = more similar
-        # Cast the embedding list to vector type explicitly
         cursor.execute(
             """
-            SELECT id, title, body, metadata, embedding <-> %s::vector AS distance
-            FROM documents
-            ORDER BY embedding <-> %s::vector
+            SELECT 
+                c.id as chunk_id,
+                c.document_id,
+                c.chunk_index,
+                c.title,
+                c.body,
+                c.metadata,
+                c.embedding <-> %s::vector AS distance
+            FROM chunks c
+            ORDER BY c.embedding <-> %s::vector
             LIMIT %s;
             """,
             (query_embedding, query_embedding, limit)
@@ -201,20 +231,19 @@ async def search_documents(q: str, limit: int = 5):
         results = []
         for row in rows:
             results.append(SearchResult(
-                id=row[0],
-                title=row[1],
-                body=row[2],
-                metadata=row[3],
-                distance=row[4]
+                chunk_id=row[0],
+                document_id=row[1],
+                chunk_index=row[2],
+                title=row[3],
+                body=row[4],
+                metadata=row[5],
+                distance=row[6]
             ))
         
         cursor.close()
         conn.close()
         
-        cursor.close()
-        conn.close()
-        
-        logger.info(f"Search completed. Found {len(results)} results.")
+        logger.info(f"Search completed. Found {len(results)} chunk results.")
         return SearchResponse(query=q, results=results)
         
     except Exception as e:
