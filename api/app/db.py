@@ -24,10 +24,11 @@ def get_db_connection():
 
 def init_database():
     """
-    Initialize the database: create pgvector extension, create table, and create indexes.
+    Initialize the database: create pgvector extension, create tables, and create indexes.
     This runs once when the FastAPI app starts.
     
     NOTE: This version uses vector(384) for sentence-transformers/all-MiniLM-L6-v2
+    Creates both 'documents' table (for metadata) and 'chunks' table (for RAG retrieval)
     """
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -50,7 +51,22 @@ def init_database():
             );
         """)
         
-        # NOTE: IVFFlat index disabled for small datasets (< 100 documents)
+        # Create chunks table for RAG-ready chunking
+        print("Creating chunks table if not exists...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS chunks (
+                id SERIAL PRIMARY KEY,
+                document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+                chunk_index INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                body TEXT NOT NULL,
+                metadata JSONB,
+                embedding vector(384),
+                UNIQUE(document_id, chunk_index)
+            );
+        """)
+        
+        # NOTE: IVFFlat index disabled for small datasets (< 100 documents/chunks)
         # IVFFlat requires significant data to work properly (~100+ documents)
         # For small datasets, brute-force search is more reliable
         # Uncomment below to enable IVFFlat for production with large datasets:
@@ -62,16 +78,34 @@ def init_database():
         #     USING ivfflat (embedding vector_l2_ops)
         #     WITH (lists = 100);
         # """)
+        # cursor.execute("""
+        #     CREATE INDEX IF NOT EXISTS chunks_embedding_idx
+        #     ON chunks
+        #     USING ivfflat (embedding vector_l2_ops)
+        #     WITH (lists = 100);
+        # """)
         
         # Create GIN index on JSONB metadata for fast JSON queries
-        print("Creating JSONB index if not exists...")
+        print("Creating JSONB indexes if not exist...")
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS documents_metadata_idx
             ON documents
             USING gin (metadata);
         """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS chunks_metadata_idx
+            ON chunks
+            USING gin (metadata);
+        """)
+        
+        # Create index on chunks.document_id for fast lookups
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS chunks_document_id_idx
+            ON chunks(document_id);
+        """)
         
         print("Database initialization complete! Using vector(384) for sentence-transformers.")
+        print("Tables created: documents, chunks")
         
     except Exception as e:
         print(f"Error during database initialization: {e}")

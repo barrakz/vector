@@ -14,11 +14,13 @@ All services run in Docker for easy local development.
 
 ## Features
 
-✅ **No API costs** - Uses local `all-MiniLM-L6-v2` model  
+✅ **RAG-ready chunking** - Documents split into ~300 word chunks for precise retrieval  
+✅ **Multilingual support** - Works with Polish, English, and 50+ languages  
+✅ **No API costs** - Uses local `paraphrase-multilingual-MiniLM-L12-v2` model  
 ✅ **Duplicate detection** - Automatically prevents duplicate URLs  
 ✅ **Webhook ingestion** - Add articles via n8n workflows  
 ✅ **Application logging** - Track all operations in `api/app.log`  
-✅ **Semantic search** - Find documents by meaning, not just keywords  
+✅ **Semantic search** - Find relevant text fragments, not just keywords  
 
 ---
 
@@ -93,7 +95,8 @@ Response:
 ```json
 {
   "status": "ok",
-  "id": 1
+  "document_id": 1,
+  "chunks_inserted": 1
 }
 ```
 
@@ -221,21 +224,29 @@ Log entries include:
 When you send a document:
 1. The **FastAPI app** checks if a document with the same URL already exists
 2. If it exists, returns the existing document ID (no duplicate)
-3. Otherwise, generates a **384-dimensional vector embedding** using the local `all-MiniLM-L6-v2` model
-4. The document is stored in **PostgreSQL** with:
-   - `title`, `body` as text
+3. Otherwise, the document **body is split into chunks** (~300 words each, 50 word overlap)
+4. Each chunk gets its own **384-dimensional vector embedding** using the local `paraphrase-multilingual-MiniLM-L12-v2` model
+5. Chunks are stored in **PostgreSQL** with:
+   - `title` (inherited from document)
+   - `body` (the chunk text, ~300 words)
    - `metadata` as **JSONB** (flexible JSON storage)
    - `embedding` as **vector(384)** in a pgvector column
+   - `document_id` (link to parent document)
+   - `chunk_index` (position in document)
+
+**Why chunking?** This enables RAG (Retrieval-Augmented Generation) by returning precise, relevant text fragments instead of entire documents.
 
 ### 2. Semantic Search (`GET /search`)
 
 When you search:
-1. The query text is converted to a vector using the **local model** (no API call!)
-2. PostgreSQL uses the **`<->` operator** (L2 distance) to find documents with similar embeddings
+1. The query text is converted to a vector using the **local multilingual model** (no API call!)
+2. PostgreSQL searches the **chunks table** using the **`<->` operator** (L2 distance) to find chunks with similar embeddings
 3. Results are ordered by distance (lower = more similar)
-4. The API returns the most relevant documents
+4. The API returns the most relevant **text fragments** (chunks), not entire documents
 
-**This means the search understands meaning**, not just keywords! For example, searching for "kot" (cat in Polish) will find documents about cats even if the exact word differs.
+**This means the search understands meaning**, not just keywords! For example, searching for "karmienie kota" (feeding a cat in Polish) will find specific chunks about cat feeding, even if the exact phrase differs.
+
+**Perfect for RAG:** Each result is a ~300 word fragment that can be directly used as context for LLMs.
 
 ### 3. JSONB Metadata
 
@@ -297,16 +308,75 @@ docker compose down -v
 
 ---
 
+## Chunking & RAG
+
+This implementation uses **text chunking** to enable RAG (Retrieval-Augmented Generation):
+
+- **Chunk size**: 300 words (configurable in `api/app/chunking.py`)
+- **Overlap**: 50 words (preserves context between chunks)
+- **Benefits**: Returns precise, relevant fragments instead of entire documents
+
+### Why Chunking?
+
+**Without chunking:**
+- Search returns entire 5000-word article
+- Relevant info buried in middle
+- Too much text for LLM context
+
+**With chunking:**
+- Search returns specific 300-word fragment
+- Precise semantic matching
+- Perfect size for LLM context
+- Multiple relevant chunks from same document possible
+
+### Changing Chunk Size
+
+Edit `api/app/chunking.py`:
+```python
+def chunk_text(text: str, chunk_size: int = 300, overlap: int = 50):
+    # Adjust chunk_size and overlap as needed
+```
+
+---
+
+## Multilingual Support
+
+The project uses `paraphrase-multilingual-MiniLM-L12-v2` which supports 50+ languages including:
+- Polish (Polski)
+- English
+- German, French, Spanish, Italian
+- And many more
+
+### Changing the Model
+
+To use a different model, edit `api/app/main.py`:
+
+```python
+# Current: Multilingual (50+ languages, 384 dimensions)
+model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
+
+# Alternative: English-only (faster, smaller)
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
+# Alternative: Best quality multilingual (768 dimensions - requires DB schema change!)
+model = SentenceTransformer("paraphrase-multilingual-mpnet-base-v2")
+```
+
+**Note:** If changing to a model with different dimensions (e.g., 768), you must also update `vector(384)` to `vector(768)` in `api/app/db.py` and rebuild the database.
+
+---
+
 ## Next Steps
 
 Now that you have a working setup, you can:
 
-1. **Experiment with different texts**: Try ingesting documents in different languages, technical documents, or creative writing
-2. **Test semantic search**: Notice how it finds similar meaning, not just matching words
-3. **Explore JSONB queries**: Add more complex metadata and query it directly in PostgreSQL
-4. **Learn n8n**: Create workflows that automatically ingest documents from external sources
-5. **Try different embedding models**: Replace `all-MiniLM-L6-v2` with multilingual models for better Polish support
-6. **Experiment with distance metrics**: Try cosine similarity (`<=>`) instead of L2 distance (`<->`)
+1. **Test RAG workflow**: Ingest long articles, search for specific topics, use results with LLMs
+2. **Experiment with different texts**: Try ingesting documents in different languages
+3. **Test semantic search**: Notice how it finds similar meaning, not just matching words
+4. **Explore JSONB queries**: Add more complex metadata and query it directly in PostgreSQL
+5. **Learn n8n**: Create workflows that automatically ingest documents from external sources
+6. **Adjust chunk size**: Experiment with different chunk sizes for your use case
+7. **Try different models**: Test English-only vs multilingual models
 
 ---
 
@@ -378,9 +448,15 @@ docker compose up --build
 
 ## Documentation
 
-- **README.md** (this file) - Quick start guide
-- **DOKUMENTACJA_TECHNICZNA.md** - Detailed technical documentation (Polish)
-- **N8N_WORKFLOW_DOCS.md** - n8n workflow guide (Polish)
+📚 **[Documentation Index](docs/README.md)** - All documentation organized by category
+
+### Quick Links
+
+- **[Technical Documentation](docs/technical/DOKUMENTACJA_TECHNICZNA.md)** - Comprehensive technical guide (Polish)
+- **[n8n Workflows](docs/workflows/N8N_WORKFLOW_DOCS.md)** - Workflow automation guide (Polish)
+- **[Chunking Guide](docs/guides/CHUNKING_GUIDE.md)** - How text chunking works
+- **[Search Guide](docs/guides/SEARCH_ENDPOINT_GUIDE.md)** - Search endpoint documentation
+- **[Changelog](CHANGELOG.md)** - Version history
 
 ---
 
