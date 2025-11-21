@@ -1,38 +1,42 @@
 # Vector Embeddings Demo with FastAPI, PostgreSQL, and pgvector
 
 This is a learning project that demonstrates:
-- **Vector embeddings** using OpenAI's `text-embedding-3-small` model
+- **Vector embeddings** using **local sentence-transformers** model (no API key needed!)
 - **Semantic search** with pgvector in PostgreSQL
 - **JSONB** for flexible document metadata
 - **FastAPI** for the REST API
-- **n8n** for workflow automation (ready to use, but empty for now)
+- **n8n** for workflow automation with webhook-based article ingestion
+- **Application logging** to track all operations
 
 All services run in Docker for easy local development.
+
+---
+
+## Features
+
+✅ **No API costs** - Uses local `all-MiniLM-L6-v2` model  
+✅ **Duplicate detection** - Automatically prevents duplicate URLs  
+✅ **Webhook ingestion** - Add articles via n8n workflows  
+✅ **Application logging** - Track all operations in `api/app.log`  
+✅ **Semantic search** - Find documents by meaning, not just keywords  
 
 ---
 
 ## Prerequisites
 
 - macOS with Docker Desktop installed and running
-- OpenAI API key (get one at https://platform.openai.com/api-keys)
+- **No API key needed!** Everything runs locally.
 
 ---
 
 ## Setup
 
-### 1. Configure environment variables
+### 1. Configure environment variables (optional)
 
-Copy the example env file and add your OpenAI API key:
+The `.env` file is optional since we use local embeddings:
 
 ```bash
 cp .env.example .env
-```
-
-Then edit `.env` and replace `YOUR_OPENAI_API_KEY_HERE` with your actual OpenAI API key:
-
-```bash
-# Example:
-OPENAI_API_KEY=sk-proj-abc123...
 ```
 
 ### 2. Build and run the Docker stack
@@ -147,22 +151,86 @@ curl http://localhost:8000/documents
 
 ---
 
+## Using n8n Workflows
+
+The project includes ready-to-use n8n workflows for automated article ingestion.
+
+### Import Workflows
+
+1. Open n8n: http://localhost:5678 (login: `admin` / `admin`)
+2. Click **three dots** (top right) → **Import from File**
+3. Import files from `n8n_workflows/`:
+   - `1_ingest_from_url.json` - Fetch and ingest articles from URLs
+   - `2_search_documents.json` - Search the vector database
+
+### Using the Webhook Workflow
+
+The **Ingest from URL** workflow accepts POST requests:
+
+**URL**: `http://localhost:5678/webhook/ingest-url`  
+**Method**: `POST`  
+**Body**:
+```json
+{
+  "url": "https://example.com/article"
+}
+```
+
+**Example with curl**:
+```bash
+curl -X POST http://localhost:5678/webhook/ingest-url \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://weszlo.com/sylvinho-trener-reprezentacji-albanii-to-on-sprobuje-ograc-urbana/"}'
+```
+
+The workflow will:
+1. Fetch the HTML from the URL
+2. Extract title and paragraphs
+3. Send to the vector API
+4. **Skip if URL already exists** (duplicate detection)
+
+See `N8N_WORKFLOW_DOCS.md` for detailed n8n documentation.
+
+---
+
+## Application Logging
+
+All operations are logged to `api/app.log`. View logs:
+
+```bash
+cat api/app.log
+```
+
+Or in real-time:
+```bash
+tail -f api/app.log
+```
+
+Log entries include:
+- Document ingestion (title, metadata, URL)
+- Duplicate detection (skipped URLs)
+- Search queries (query text, result count)
+- Errors and warnings
+
+---
+
 ## How It Works
 
 ### 1. Document Ingestion (`POST /ingest`)
 
 When you send a document:
-1. The **FastAPI app** receives the title, body, and metadata
-2. It calls the **OpenAI API** to generate a vector embedding (1536 dimensions) from the document body
-3. The document is stored in **PostgreSQL** with:
+1. The **FastAPI app** checks if a document with the same URL already exists
+2. If it exists, returns the existing document ID (no duplicate)
+3. Otherwise, generates a **384-dimensional vector embedding** using the local `all-MiniLM-L6-v2` model
+4. The document is stored in **PostgreSQL** with:
    - `title`, `body` as text
    - `metadata` as **JSONB** (flexible JSON storage)
-   - `embedding` as **vector(1536)** in a pgvector column
+   - `embedding` as **vector(384)** in a pgvector column
 
 ### 2. Semantic Search (`GET /search`)
 
 When you search:
-1. The query text is sent to **OpenAI API** to generate its embedding
+1. The query text is converted to a vector using the **local model** (no API call!)
 2. PostgreSQL uses the **`<->` operator** (L2 distance) to find documents with similar embeddings
 3. Results are ordered by distance (lower = more similar)
 4. The API returns the most relevant documents
@@ -194,14 +262,21 @@ The `pgvector` extension adds:
 /Users/brakuzy/Code/personal/vector/
 ├── docker-compose.yml       # Defines the 3 services (db, api, n8n)
 ├── .env.example             # Template for environment variables
-├── .env                     # Your actual config (git-ignored, you create this)
+├── .env                     # Your actual config (git-ignored, optional)
+├── .gitignore               # Git ignore rules
 ├── README.md                # This file
+├── DOKUMENTACJA_TECHNICZNA.md  # Technical documentation (Polish)
+├── N8N_WORKFLOW_DOCS.md     # n8n workflow documentation (Polish)
+├── n8n_workflows/           # Ready-to-import n8n workflows
+│   ├── 1_ingest_from_url.json
+│   └── 2_search_documents.json
 └── api/
     ├── Dockerfile           # Builds the FastAPI container
     ├── requirements.txt     # Python dependencies
     └── app/
         ├── main.py          # FastAPI app with endpoints
-        └── db.py            # Database connection helper
+        ├── db.py            # Database connection helper
+        └── app.log          # Application logs (auto-created)
 ```
 
 ---
@@ -229,11 +304,8 @@ Now that you have a working setup, you can:
 1. **Experiment with different texts**: Try ingesting documents in different languages, technical documents, or creative writing
 2. **Test semantic search**: Notice how it finds similar meaning, not just matching words
 3. **Explore JSONB queries**: Add more complex metadata and query it directly in PostgreSQL
-4. **Learn n8n**: Create workflows that could:
-   - Automatically ingest documents from external sources
-   - Trigger actions based on document similarity
-   - Connect to other APIs
-5. **Try different embedding models**: OpenAI offers other models (`text-embedding-3-large` for higher quality)
+4. **Learn n8n**: Create workflows that automatically ingest documents from external sources
+5. **Try different embedding models**: Replace `all-MiniLM-L6-v2` with multilingual models for better Polish support
 6. **Experiment with distance metrics**: Try cosine similarity (`<=>`) instead of L2 distance (`<->`)
 
 ---
@@ -247,6 +319,12 @@ docker compose logs -f db     # PostgreSQL logs
 docker compose logs -f n8n    # n8n logs
 ```
 
+### View application logs
+```bash
+cat api/app.log               # All logs
+tail -f api/app.log           # Follow logs in real-time
+```
+
 ### Connect to PostgreSQL directly
 ```bash
 docker exec -it vector_db psql -U app -d app
@@ -256,6 +334,13 @@ Then you can run SQL queries:
 ```sql
 -- View documents table
 SELECT * FROM documents;
+
+-- Check for duplicates
+SELECT metadata->>'url' as url, COUNT(*) 
+FROM documents 
+WHERE metadata->>'url' IS NOT NULL 
+GROUP BY metadata->>'url' 
+HAVING COUNT(*) > 1;
 
 -- Search using SQL directly
 SELECT id, title, embedding <-> '[0.1, 0.2, ...]'::vector AS distance
@@ -273,9 +358,9 @@ docker compose up --build
 
 ## Troubleshooting
 
-**Problem**: API returns 500 error about OpenAI key
+**Problem**: Model loading takes a long time on first start
 
-**Solution**: Make sure you've set `OPENAI_API_KEY` in `.env` file
+**Solution**: This is normal - the model (~90MB) is downloaded on first run. Subsequent starts are much faster.
 
 **Problem**: Database connection errors
 
@@ -284,6 +369,18 @@ docker compose up --build
 **Problem**: n8n not loading
 
 **Solution**: Give it a minute - n8n takes a bit longer to start up on first run
+
+**Problem**: Duplicate documents in database
+
+**Solution**: The API now automatically prevents duplicates based on URL. Existing duplicates can be removed via SQL.
+
+---
+
+## Documentation
+
+- **README.md** (this file) - Quick start guide
+- **DOKUMENTACJA_TECHNICZNA.md** - Detailed technical documentation (Polish)
+- **N8N_WORKFLOW_DOCS.md** - n8n workflow guide (Polish)
 
 ---
 

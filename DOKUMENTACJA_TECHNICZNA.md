@@ -12,10 +12,11 @@
 4. [Jak to działa](#jak-to-działa)
 5. [Instalacja i uruchomienie](#instalacja-i-uruchomienie)
 6. [API Endpoints](#api-endpoints)
-7. [Testowanie](#testowanie)
-8. [Baza danych](#baza-danych)
-9. [Embeddingi](#embeddingi)
-10. [Troubleshooting](#troubleshooting)
+7. [Nowe funkcje](#nowe-funkcje)
+8. [Testowanie](#testowanie)
+9. [Baza danych](#baza-danych)
+10. [Embeddingi](#embeddingi)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -358,6 +359,129 @@ curl -s "http://localhost:8000/search?q=docker&limit=3" | python3 -m json.tool
   ],
   "count": 1
 }
+```
+
+---
+
+## 🆕 Nowe funkcje
+
+### 1. Automatyczne wykrywanie duplikatów
+
+Endpoint `/ingest` automatycznie sprawdza, czy dokument z danym URL już istnieje w bazie:
+
+**Jak działa:**
+- Przed dodaniem dokumentu sprawdza pole `metadata.url`
+- Jeśli dokument z tym URL już istnieje, zwraca ID istniejącego dokumentu
+- Nie generuje embeddingu ani nie dodaje duplikatu do bazy
+- Loguje informację o pominięciu duplikatu
+
+**Przykład:**
+
+```bash
+# Pierwsze dodanie
+curl -X POST http://localhost:8000/ingest \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Artykuł",
+    "body": "Treść artykułu",
+    "metadata": {"url": "https://example.com/article"}
+  }'
+# Response: {"status": "ok", "id": 1}
+
+# Drugie dodanie tego samego URL
+curl -X POST http://localhost:8000/ingest \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Artykuł",
+    "body": "Treść artykułu",
+    "metadata": {"url": "https://example.com/article"}
+  }'
+# Response: {"status": "ok", "id": 1}  ← Ten sam ID, brak duplikatu!
+```
+
+**Zapytanie SQL do sprawdzenia duplikatów:**
+
+```bash
+docker exec vector_db psql -U app -d app -c "
+  SELECT metadata->>'url' as url, COUNT(*) 
+  FROM documents 
+  WHERE metadata->>'url' IS NOT NULL 
+  GROUP BY metadata->>'url' 
+  HAVING COUNT(*) > 1;
+"
+```
+
+**Usuwanie istniejących duplikatów:**
+
+```bash
+# Znajdź duplikaty (zachowaj najmniejsze ID)
+docker exec vector_db psql -U app -d app -c "
+  DELETE FROM documents a USING documents b
+  WHERE a.id > b.id 
+  AND a.metadata->>'url' = b.metadata->>'url'
+  AND a.metadata->>'url' IS NOT NULL;
+"
+```
+
+### 2. Logowanie aplikacji
+
+Wszystkie operacje API są logowane do pliku `api/app.log`:
+
+**Lokalizacja:**
+- W kontenerze: `/app/app.log`
+- Na hoście: `api/app.log` (dzięki volume mount)
+
+**Co jest logowane:**
+- Uruchomienie/wyłączenie aplikacji
+- Ładowanie modelu sentence-transformers
+- Ingestion dokumentów (tytuł, metadata, URL)
+- Wykrywanie duplikatów (pominięte URL-e)
+- Wyszukiwania (query, liczba wyników)
+- Błędy i wyjątki
+
+**Przykładowy log:**
+
+```
+2025-11-21 09:48:08,397 [INFO] Loading sentence-transformers model: all-MiniLM-L6-v2...
+2025-11-21 09:48:10,687 [INFO] Model loaded successfully!
+2025-11-21 09:48:10,695 [INFO] Starting up: initializing database...
+2025-11-21 09:56:29,476 [INFO] Ingesting document: 'Log Test' | Metadata: {'source': 'manual_test'}
+2025-11-21 09:56:29,525 [INFO] Document inserted successfully with ID: 39
+2025-11-21 09:56:47,313 [INFO] Searching for: 'dog' | Limit: 3
+2025-11-21 09:56:47,343 [INFO] Search completed. Found 3 results.
+2025-11-21 09:57:09,744 [INFO] Ingesting document: 'Sylvinho...' | Metadata: {'source': 'n8n_webhook', 'url': 'https://...'}
+2025-11-21 09:57:09,815 [INFO] Document inserted successfully with ID: 40
+2025-11-21 10:02:15,123 [INFO] Document with URL 'https://...' already exists (ID: 40). Skipping.
+```
+
+**Przeglądanie logów:**
+
+```bash
+# Wszystkie logi
+cat api/app.log
+
+# Ostatnie 50 linii
+tail -n 50 api/app.log
+
+# Śledzenie logów na żywo
+tail -f api/app.log
+
+# Tylko błędy
+grep ERROR api/app.log
+
+# Tylko duplikaty
+grep "already exists" api/app.log
+```
+
+**Czyszczenie logów:**
+
+```bash
+# Wyczyść plik logów
+> api/app.log
+
+# Lub usuń i zrestartuj API
+rm api/app.log
+docker compose restart api
 ```
 
 ---
