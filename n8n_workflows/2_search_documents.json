@@ -1,0 +1,97 @@
+{
+    "name": "2. Search Documents",
+    "nodes": [
+        {
+            "parameters": {},
+            "id": "manual-trigger",
+            "name": "When clicking \"Execute Workflow\"",
+            "type": "n8n-nodes-base.manualTrigger",
+            "typeVersion": 1,
+            "position": [
+                460,
+                460
+            ]
+        },
+        {
+            "parameters": {
+                "assignments": {
+                    "assignments": [
+                        {
+                            "id": "query-assignment",
+                            "name": "q",
+                            "value": "artificial intelligence",
+                            "type": "string"
+                        },
+                        {
+                            "id": "limit-assignment",
+                            "name": "limit",
+                            "value": 3,
+                            "type": "number"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "set-query",
+            "name": "Set Query",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.4,
+            "position": [
+                680,
+                460
+            ]
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "http://vector_api:8000/search",
+                "sendQuery": true,
+                "queryParameters": {
+                    "parameters": [
+                        {
+                            "name": "q",
+                            "value": "={{ $json.q }}"
+                        },
+                        {
+                            "name": "limit",
+                            "value": "={{ $json.limit }}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "search-api",
+            "name": "Search Vector API",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                900,
+                460
+            ]
+        }
+    ],
+    "connections": {
+        "When clicking \"Execute Workflow\"": {
+            "main": [
+                [
+                    {
+                        "node": "Set Query",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Set Query": {
+            "main": [
+                [
+                    {
+                        "node": "Search Vector API",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}
