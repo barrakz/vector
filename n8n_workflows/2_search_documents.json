@@ -1,60 +1,37 @@
 {
-    "name": "2. Search Documents",
+    "name": "2. Search Documents (Webhook GET)",
     "nodes": [
         {
-            "parameters": {},
-            "id": "manual-trigger",
-            "name": "When clicking \"Execute Workflow\"",
-            "type": "n8n-nodes-base.manualTrigger",
-            "typeVersion": 1,
+            "parameters": {
+                "httpMethod": "GET",
+                "path": "search",
+                "options": {},
+                "responseMode": "responseNode"
+            },
+            "id": "webhook-trigger",
+            "name": "Webhook (GET /search)",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
             "position": [
                 460,
                 460
-            ]
-        },
-        {
-            "parameters": {
-                "assignments": {
-                    "assignments": [
-                        {
-                            "id": "query-assignment",
-                            "name": "q",
-                            "value": "artificial intelligence",
-                            "type": "string"
-                        },
-                        {
-                            "id": "limit-assignment",
-                            "name": "limit",
-                            "value": 3,
-                            "type": "number"
-                        }
-                    ]
-                },
-                "options": {}
-            },
-            "id": "set-query",
-            "name": "Set Query",
-            "type": "n8n-nodes-base.set",
-            "typeVersion": 3.4,
-            "position": [
-                680,
-                460
-            ]
+            ],
+            "webhookId": "search-webhook"
         },
         {
             "parameters": {
                 "method": "GET",
-                "url": "http://vector_api:8000/search",
+                "url": "http://api:8000/search",
                 "sendQuery": true,
                 "queryParameters": {
                     "parameters": [
                         {
                             "name": "q",
-                            "value": "={{ $json.q }}"
+                            "value": "={{ $json.query.q || 'default search' }}"
                         },
                         {
                             "name": "limit",
-                            "value": "={{ $json.limit }}"
+                            "value": "={{ $json.query.limit || 5 }}"
                         }
                     ]
                 },
@@ -65,24 +42,28 @@
             "type": "n8n-nodes-base.httpRequest",
             "typeVersion": 4.1,
             "position": [
+                680,
+                460
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ $json }}",
+                "options": {}
+            },
+            "id": "respond-to-webhook",
+            "name": "Respond to Webhook",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
                 900,
                 460
             ]
         }
     ],
     "connections": {
-        "When clicking \"Execute Workflow\"": {
-            "main": [
-                [
-                    {
-                        "node": "Set Query",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Set Query": {
+        "Webhook (GET /search)": {
             "main": [
                 [
                     {
@@ -92,6 +73,20 @@
                     }
                 ]
             ]
+        },
+        "Search Vector API": {
+            "main": [
+                [
+                    {
+                        "node": "Respond to Webhook",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
         }
+    },
+    "settings": {
+        "executionOrder": "v1"
     }
 }
