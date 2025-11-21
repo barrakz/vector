@@ -448,9 +448,15 @@ docker compose up --build
 
 ## Documentation
 
-- **README.md** (this file) - Quick start guide
-- **DOKUMENTACJA_TECHNICZNA.md** - Detailed technical documentation (Polish)
-- **N8N_WORKFLOW_DOCS.md** - n8n workflow guide (Polish)
+📚 **[Documentation Index](docs/README.md)** - All documentation organized by category
+
+### Quick Links
+
+- **[Technical Documentation](docs/technical/DOKUMENTACJA_TECHNICZNA.md)** - Comprehensive technical guide (Polish)
+- **[n8n Workflows](docs/workflows/N8N_WORKFLOW_DOCS.md)** - Workflow automation guide (Polish)
+- **[Chunking Guide](docs/guides/CHUNKING_GUIDE.md)** - How text chunking works
+- **[Search Guide](docs/guides/SEARCH_ENDPOINT_GUIDE.md)** - Search endpoint documentation
+- **[Changelog](CHANGELOG.md)** - Version history
 
 ---
 
