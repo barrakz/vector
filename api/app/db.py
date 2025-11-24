@@ -104,8 +104,59 @@ def init_database():
             ON chunks(document_id);
         """)
         
+        # Create players table for Player Profile Generator
+        print("Creating players table if not exists...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS players (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                summary TEXT NOT NULL,
+                position VARCHAR(100) NOT NULL,
+                clubs TEXT[] NOT NULL DEFAULT '{}',
+                characteristics TEXT NOT NULL,
+                strengths TEXT NOT NULL,
+                weaknesses TEXT NOT NULL,
+                estimated_current_form TEXT NOT NULL,
+                team VARCHAR(255),
+                metadata JSONB DEFAULT '{}',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(name)
+            );
+        """)
+        
+        # Create indexes for players table
+        print("Creating players indexes if not exist...")
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_players_name ON players(name);
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_players_team ON players(team);
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_players_metadata ON players USING gin(metadata);
+        """)
+        
+        # Create trigger for auto-updating updated_at
+        cursor.execute("""
+            CREATE OR REPLACE FUNCTION update_updated_at_column()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.updated_at = CURRENT_TIMESTAMP;
+                RETURN NEW;
+            END;
+            $$ language 'plpgsql';
+        """)
+        cursor.execute("""
+            DROP TRIGGER IF EXISTS update_players_updated_at ON players;
+        """)
+        cursor.execute("""
+            CREATE TRIGGER update_players_updated_at BEFORE UPDATE ON players
+                FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        """)
+        
         print("Database initialization complete! Using vector(384) for sentence-transformers.")
-        print("Tables created: documents, chunks")
+        print("Tables created: documents, chunks, players")
         
     except Exception as e:
         print(f"Error during database initialization: {e}")

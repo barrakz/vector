@@ -15,6 +15,7 @@ from psycopg.types.json import Jsonb
 import logging
 from app.db import get_db_connection, init_database
 from app.chunking import chunk_text
+from app.player import router as player_router  # Import Player router
 
 # Configure logging
 logging.basicConfig(
@@ -60,11 +61,14 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app
 app = FastAPI(
-    title="Vector Embeddings Demo (Local Model)",
-    description="Demo API using LOCAL sentence-transformers for embeddings (no OpenAI). Semantic search with pgvector and JSONB metadata.",
-    version="2.0.0",
+    title="Vector Embeddings Demo (Local Model) + Player Profiles",
+    description="Demo API using LOCAL sentence-transformers for embeddings (no OpenAI). Semantic search with pgvector and JSONB metadata. Includes Player profile generator.",
+    version="2.1.0",
     lifespan=lifespan
 )
+
+# Register Player router
+app.include_router(player_router)
 
 
 # Request/Response models
