@@ -2,7 +2,7 @@
 Player Profile API endpoints.
 Niezależny moduł dla systemu generowania profili piłkarzy Ekstraklasy.
 """
-from typing import Any, Optional, List
+from typing import Any, Optional, List, Union
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
@@ -22,13 +22,13 @@ router = APIRouter(prefix="/player", tags=["player"])
 # Request/Response models
 class PlayerProfileCreate(BaseModel):
     name: str = Field(..., description="Imię i nazwisko piłkarza")
-    summary: str = Field(..., description="Krótkie podsumowanie kariery")
-    position: str = Field(..., description="Pozycja na boisku")
+    summary: Optional[str] = Field(None, description="Krótkie podsumowanie kariery")
+    position: Optional[str] = Field(None, description="Pozycja na boisku")
     clubs: List[str] = Field(default_factory=list, description="Lista klubów w karierze")
-    characteristics: str = Field(..., description="Charakterystyka stylu gry")
-    strengths: str = Field(..., description="Mocne strony")
-    weaknesses: str = Field(..., description="Słabe strony")
-    estimated_current_form: str = Field(..., description="Ocena aktualnej formy")
+    characteristics: Optional[str] = Field(None, description="Charakterystyka stylu gry")
+    strengths: Optional[Union[str, List[str]]] = Field(None, description="Mocne strony (tekst lub lista)")
+    weaknesses: Optional[Union[str, List[str]]] = Field(None, description="Słabe strony (tekst lub lista)")
+    estimated_current_form: Optional[str] = Field(None, description="Ocena aktualnej formy")
     team: Optional[str] = Field(None, description="Obecna drużyna")
     metadata: Optional[dict[str, Any]] = Field(default_factory=dict, description="Dodatkowe dane")
 
@@ -38,8 +38,8 @@ class PlayerProfileUpdate(BaseModel):
     position: Optional[str] = None
     clubs: Optional[List[str]] = None
     characteristics: Optional[str] = None
-    strengths: Optional[str] = None
-    weaknesses: Optional[str] = None
+    strengths: Optional[Union[str, List[str]]] = None
+    weaknesses: Optional[Union[str, List[str]]] = None
     estimated_current_form: Optional[str] = None
     team: Optional[str] = None
     metadata: Optional[dict[str, Any]] = None
@@ -83,6 +83,17 @@ async def create_player(profile: PlayerProfileCreate):
         metadata = profile.metadata or {}
         metadata["generated_at"] = datetime.utcnow().isoformat()
         
+        # Helper to convert list to string if needed
+        def ensure_string(val: Optional[Union[str, List[str]]]) -> str:
+            if val is None:
+                return ""
+            if isinstance(val, list):
+                return ", ".join(val)
+            return val
+
+        strengths_str = ensure_string(profile.strengths)
+        weaknesses_str = ensure_string(profile.weaknesses)
+        
         # UPSERT - wstaw nowy lub zaktualizuj istniejący
         logger.info(f"Creating/updating player profile: '{profile.name}'")
         cursor.execute(
@@ -107,13 +118,13 @@ async def create_player(profile: PlayerProfileCreate):
             """,
             (
                 profile.name,
-                profile.summary,
-                profile.position,
+                profile.summary or "",
+                profile.position or "",
                 profile.clubs,
-                profile.characteristics,
-                profile.strengths,
-                profile.weaknesses,
-                profile.estimated_current_form,
+                profile.characteristics or "",
+                strengths_str,
+                weaknesses_str,
+                profile.estimated_current_form or "",
                 profile.team,
                 Jsonb(metadata)
             )

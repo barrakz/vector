@@ -344,17 +344,77 @@ SELECT metadata FROM players WHERE id = 1;
 
 ---
 
-## 🔧 Troubleshooting
+## 🧠 Jak działa generowanie profilu (AI & Workflow)
 
-### Problem: Workflow nie działa
+Proces generowania profilu piłkarza jest w pełni zautomatyzowany dzięki n8n i składa się z kilku kluczowych etapów. Poniżej znajdziesz szczegółowy opis każdego z nich.
 
-**Rozwiązanie:**
-1. Sprawdź czy workflow jest **Active** (zielony przełącznik)
-2. Sprawdź logi n8n: `docker compose logs -f n8n`
-3. Sprawdź czy GEMINI_API_KEY jest ustawiony:
-   ```bash
-   docker exec vector_n8n env | grep GEMINI
-   ```
+### 1. Pobieranie danych (Wikipedia)
+Workflow najpierw próbuje znaleźć informacje o piłkarzu w **polskiej Wikipedii**.
+- Jeśli znajdzie artykuł, pobiera jego treść (extract) oraz zdjęcie (thumbnail).
+- Jeśli dane z polskiej Wikipedii są skąpe (mniej niż 50 znaków) lub artykuł nie istnieje, workflow automatycznie przeszukuje **angielską Wikipedię**.
+- Dane z obu źródeł są agregowane, aby dostarczyć modelowi AI jak najwięcej kontekstu.
+- **Anonimowość:** Zapytania do Wikipedii są wysyłane z nagłówkiem `User-Agent`, ale bez logowania, co zapewnia zgodność z polityką API Wikipedii.
+
+### 2. Generowanie profilu (Gemini API)
+Zgromadzone dane tekstowe są przesyłane do modelu **Google Gemini** (obecnie używany model: `gemini-2.0-flash`).
+
+**Prompt (Instrukcja dla AI):**
+Model otrzymuje precyzyjną instrukcję (prompt), która definiuje jego rolę i zadanie:
+> "Jesteś ekspertem od piłki nożnej, specjalizujesz się w Ekstraklasie polskiej. ZADANIE: Na podstawie poniższych danych z Wikipedii, wygeneruj szczegółowy profil piłkarza."
+
+**Dane wejściowe dla modelu:**
+- Nazwa piłkarza
+- Surowy tekst z Wikipedii (PL i/lub EN)
+- Wykryta pozycja (z prostego parsowania tekstu)
+
+**Logika modelu:**
+Model ma za zadanie:
+1. Przeanalizować tekst z Wikipedii.
+2. Uzupełnić go o **własną wiedzę** (jeśli dane z Wiki są niepełne, a model "zna" zawodnika).
+3. Wygenerować ustrukturyzowany obiekt JSON zawierający:
+   - Podsumowanie kariery
+   - Pozycję
+   - Listę klubów
+   - Charakterystykę gry (styl, mocne/słabe strony)
+   - Ocenę aktualnej formy
+
+### 3. Zapis do bazy (UPSERT)
+Wygenerowany JSON jest przesyłany do Twojego API (`POST /player/create`).
+- System używa mechanizmu **UPSERT** (Update or Insert).
+- Jeśli piłkarz o takim nazwisku już istnieje, jego dane są **aktualizowane**.
+- Jeśli to nowy piłkarz, tworzony jest **nowy rekord**.
+
+---
+
+## ⚙️ Konfiguracja i Modyfikacje
+
+### Jak zmienić prompt dla AI?
+Prompt znajduje się bezpośrednio w workflow n8n, w nodzie **"Generate Profile with Gemini"**.
+1. Otwórz workflow w n8n.
+2. Kliknij dwukrotnie node **"Generate Profile with Gemini"**.
+3. W sekcji `Body Parameters` -> `contents` -> `parts` -> `text` znajdziesz treść promptu.
+4. Możesz go edytować, np. aby zmienić styl opisu, dodać nowe pola do JSON-a lub zmienić język.
+
+### Czy Gemini korzysta tylko z Wikipedii?
+**Nie tylko.** Prompt instruuje model: *"Jeśli masz dane z Wikipedii LUB znasz zawodnika"*.
+- **Wikipedia** jest głównym źródłem faktów (kluby, historia).
+- **Wiedza własna modelu** jest używana do uzupełnienia charakterystyki, stylu gry i oceny formy, szczególnie gdy Wikipedia zawiera tylko suche fakty.
+- Dzięki temu opisy są bardziej "ludzkie" i analityczne, a nie tylko kopią encyklopedii.
+
+### Zmiana modelu AI
+Obecnie workflow używa `gemini-2.0-flash`. Aby to zmienić (np. na `gemini-1.5-pro`):
+1. W nodzie **"Generate Profile with Gemini"** zmień URL na: `.../models/gemini-1.5-pro:generateContent`.
+2. W nodzie **"Parse Gemini Response"** zaktualizuj pole `model` w kodzie JavaScript (dla celów statystycznych w metadanych).
+
+---
+
+## 🛠️ Troubleshooting
+
+### Błąd "The resource you are requesting could not be found"
+Oznacza to zazwyczaj, że wybrany model (np. `gemini-pro`) nie jest dostępny w używanej wersji API (`v1beta`). Upewnij się, że używasz modelu dostępnego dla Twojego klucza API (np. `gemini-2.0-flash`).
+
+### Błąd "Forbidden" (Wikipedia)
+Wikipedia blokuje requesty bez nagłówka `User-Agent`. Workflow ma to już skonfigurowane ("n8n-player-bot/1.0"), więc nie powinno to sprawiać problemów. Jeśli wystąpi, sprawdź nody "Wikipedia Search".
 
 ### Problem: Gemini zwraca błąd 403
 

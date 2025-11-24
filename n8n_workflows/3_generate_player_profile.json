@@ -141,7 +141,7 @@
         {
             "parameters": {
                 "method": "POST",
-                "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
+                "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
                 "sendHeaders": true,
                 "headerParameters": {
                     "parameters": [
@@ -178,7 +178,7 @@
         },
         {
             "parameters": {
-                "jsCode": "// Parse Gemini response\nconst geminiResponse = $input.item.json;\nconst aggregatedData = $('Aggregate Data (with EN)').item.json || $('Aggregate Data (PL only)').item.json;\n\nlet profile = {};\n\ntry {\n  // Extract JSON from Gemini response\n  const text = geminiResponse.candidates[0].content.parts[0].text;\n  \n  // Remove markdown code blocks if present\n  const jsonText = text.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  \n  profile = JSON.parse(jsonText);\n  \n  // Add metadata\n  profile.metadata = {\n    sources: ['wikipedia'],\n    generated_at: new Date().toISOString(),\n    model: 'gemini-pro',\n    has_wiki_data: aggregatedData.has_wiki_data,\n    image_url: aggregatedData.image_url\n  };\n  \n} catch (error) {\n  // Fallback if parsing fails\n  profile = {\n    known_player: false,\n    message: `Error parsing Gemini response: ${error.message}`\n  };\n}\n\nreturn profile;"
+                "jsCode": "// Parse Gemini response\nconst geminiResponse = $input.item.json;\nconst aggregatedData = $('Aggregate Data (with EN)').item.json || $('Aggregate Data (PL only)').item.json;\n\nlet profile = {};\n\ntry {\n  // Extract JSON from Gemini response\n  const text = geminiResponse.candidates[0].content.parts[0].text;\n  \n  // Remove markdown code blocks if present\n  const jsonText = text.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  \n  profile = JSON.parse(jsonText);\n  \n  // Add metadata\n  profile.metadata = {\n    sources: ['wikipedia'],\n    generated_at: new Date().toISOString(),\n    model: 'gemini-2.0-flash',\n    has_wiki_data: aggregatedData.has_wiki_data,\n    image_url: aggregatedData.image_url\n  };\n  \n} catch (error) {\n  // Fallback if parsing fails\n  profile = {\n    known_player: false,\n    message: `Error parsing Gemini response: ${error.message}`\n  };\n}\n\nreturn profile;"
             },
             "id": "parse-gemini",
             "name": "Parse Gemini Response",
