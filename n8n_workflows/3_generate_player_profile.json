@@ -22,6 +22,19 @@
             "parameters": {
                 "method": "GET",
                 "url": "=https://pl.wikipedia.org/w/api.php?action=query&format=json&prop=extracts|pageimages&exintro=1&explaintext=1&titles={{ encodeURIComponent($json.body.name) }}&piprop=thumbnail&pithumbsize=300",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "User-Agent",
+                            "value": "n8n-player-bot/1.0 (https://github.com/yourusername/vector; contact@example.com)"
+                        },
+                        {
+                            "name": "Accept",
+                            "value": "application/json"
+                        }
+                    ]
+                },
                 "options": {}
             },
             "id": "wikipedia-pl",
@@ -75,6 +88,19 @@
             "parameters": {
                 "method": "GET",
                 "url": "=https://en.wikipedia.org/w/api.php?action=query&format=json&prop=extracts|pageimages&exintro=1&explaintext=1&titles={{ encodeURIComponent($('Webhook (POST /generate-player)').item.json.body.name) }}&piprop=thumbnail&pithumbsize=300",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "User-Agent",
+                            "value": "n8n-player-bot/1.0 (https://github.com/yourusername/vector; contact@example.com)"
+                        },
+                        {
+                            "name": "Accept",
+                            "value": "application/json"
+                        }
+                    ]
+                },
                 "options": {}
             },
             "id": "wikipedia-en",
