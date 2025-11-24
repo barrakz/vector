@@ -21,62 +21,7 @@
         {
             "parameters": {
                 "method": "GET",
-                "url": "=http://vector_api:8000/player/search?name={{ encodeURIComponent($json.body.name) }}",
-                "options": {}
-            },
-            "id": "check-exists",
-            "name": "Check if Player Exists",
-            "type": "n8n-nodes-base.httpRequest",
-            "typeVersion": 4.1,
-            "position": [
-                680,
-                460
-            ]
-        },
-        {
-            "parameters": {
-                "conditions": {
-                    "options": {},
-                    "conditions": [
-                        {
-                            "leftValue": "={{ $json.found }}",
-                            "rightValue": true,
-                            "operator": {
-                                "type": "boolean",
-                                "operation": "equals"
-                            }
-                        }
-                    ]
-                }
-            },
-            "id": "if-exists",
-            "name": "IF Player Exists",
-            "type": "n8n-nodes-base.if",
-            "typeVersion": 2,
-            "position": [
-                900,
-                460
-            ]
-        },
-        {
-            "parameters": {
-                "respondWith": "json",
-                "responseBody": "={{ { \"status\": \"exists\", \"profile\": $json.profile } }}",
-                "options": {}
-            },
-            "id": "respond-exists",
-            "name": "Respond - Already Exists",
-            "type": "n8n-nodes-base.respondToWebhook",
-            "typeVersion": 1,
-            "position": [
-                1120,
-                340
-            ]
-        },
-        {
-            "parameters": {
-                "method": "GET",
-                "url": "=https://pl.wikipedia.org/w/api.php?action=query&format=json&prop=extracts|pageimages&exintro=1&explaintext=1&titles={{ encodeURIComponent($('Webhook (POST /generate-player)').item.json.body.name) }}&piprop=thumbnail&pithumbsize=300",
+                "url": "=https://pl.wikipedia.org/w/api.php?action=query&format=json&prop=extracts|pageimages&exintro=1&explaintext=1&titles={{ encodeURIComponent($json.body.name) }}&piprop=thumbnail&pithumbsize=300",
                 "options": {}
             },
             "id": "wikipedia-pl",
@@ -84,8 +29,8 @@
             "type": "n8n-nodes-base.httpRequest",
             "typeVersion": 4.1,
             "position": [
-                1120,
-                580
+                680,
+                460
             ]
         },
         {
@@ -97,8 +42,8 @@
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [
-                1340,
-                580
+                900,
+                460
             ]
         },
         {
@@ -122,8 +67,8 @@
             "type": "n8n-nodes-base.if",
             "typeVersion": 2,
             "position": [
-                1560,
-                580
+                1120,
+                460
             ]
         },
         {
@@ -137,8 +82,8 @@
             "type": "n8n-nodes-base.httpRequest",
             "typeVersion": 4.1,
             "position": [
-                1780,
-                700
+                1340,
+                580
             ]
         },
         {
@@ -150,8 +95,8 @@
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [
-                2000,
-                700
+                1560,
+                580
             ]
         },
         {
@@ -163,8 +108,8 @@
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [
-                1780,
-                460
+                1340,
+                340
             ]
         },
         {
@@ -201,8 +146,8 @@
             "type": "n8n-nodes-base.httpRequest",
             "typeVersion": 4.1,
             "position": [
-                2220,
-                580
+                1780,
+                460
             ]
         },
         {
@@ -214,8 +159,8 @@
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [
-                2440,
-                580
+                2000,
+                460
             ]
         },
         {
@@ -239,8 +184,8 @@
             "type": "n8n-nodes-base.if",
             "typeVersion": 2,
             "position": [
-                2660,
-                580
+                2220,
+                460
             ]
         },
         {
@@ -292,27 +237,27 @@
                 "options": {}
             },
             "id": "save-to-db",
-            "name": "Save to Database",
+            "name": "Save to Database (UPSERT)",
             "type": "n8n-nodes-base.httpRequest",
             "typeVersion": 4.1,
             "position": [
-                2880,
-                460
+                2440,
+                340
             ]
         },
         {
             "parameters": {
                 "respondWith": "json",
-                "responseBody": "={{ { \"status\": \"created\", \"profile\": $json } }}",
+                "responseBody": "={{ $json }}",
                 "options": {}
             },
-            "id": "respond-created",
-            "name": "Respond - Profile Created",
+            "id": "respond-success",
+            "name": "Respond - Success",
             "type": "n8n-nodes-base.respondToWebhook",
             "typeVersion": 1,
             "position": [
-                3100,
-                460
+                2660,
+                340
             ]
         },
         {
@@ -326,43 +271,14 @@
             "type": "n8n-nodes-base.respondToWebhook",
             "typeVersion": 1,
             "position": [
-                2880,
-                700
+                2440,
+                580
             ]
         }
     ],
     "connections": {
         "Webhook (POST /generate-player)": {
             "main": [
-                [
-                    {
-                        "node": "Check if Player Exists",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Check if Player Exists": {
-            "main": [
-                [
-                    {
-                        "node": "IF Player Exists",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "IF Player Exists": {
-            "main": [
-                [
-                    {
-                        "node": "Respond - Already Exists",
-                        "type": "main",
-                        "index": 0
-                    }
-                ],
                 [
                     {
                         "node": "Wikipedia Search (PL)",
@@ -471,7 +387,7 @@
             "main": [
                 [
                     {
-                        "node": "Save to Database",
+                        "node": "Save to Database (UPSERT)",
                         "type": "main",
                         "index": 0
                     }
@@ -485,11 +401,11 @@
                 ]
             ]
         },
-        "Save to Database": {
+        "Save to Database (UPSERT)": {
             "main": [
                 [
                     {
-                        "node": "Respond - Profile Created",
+                        "node": "Respond - Success",
                         "type": "main",
                         "index": 0
                     }

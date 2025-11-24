@@ -70,38 +70,21 @@ class PlayerCreateResponse(BaseModel):
 @router.post("/create", response_model=PlayerCreateResponse)
 async def create_player(profile: PlayerProfileCreate):
     """
-    Utwórz nowy profil piłkarza.
+    Utwórz lub zaktualizuj profil piłkarza (UPSERT).
     
     Endpoint używany przez n8n workflow po wygenerowaniu profilu przez Gemini.
-    Sprawdza duplikaty po nazwisku przed zapisem.
+    Jeśli piłkarz już istnieje (po nazwisku), aktualizuje jego profil.
     """
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Sprawdź czy piłkarz już istnieje
-        cursor.execute(
-            "SELECT id FROM players WHERE name = %s;",
-            (profile.name,)
-        )
-        existing = cursor.fetchone()
-        
-        if existing:
-            cursor.close()
-            conn.close()
-            logger.info(f"Player '{profile.name}' already exists (ID: {existing[0]})")
-            return PlayerCreateResponse(
-                status="exists",
-                player_id=existing[0],
-                message=f"Profil piłkarza '{profile.name}' już istnieje"
-            )
-        
         # Dodaj metadata z timestampem generowania
         metadata = profile.metadata or {}
         metadata["generated_at"] = datetime.utcnow().isoformat()
         
-        # Wstaw nowy profil
-        logger.info(f"Creating new player profile: '{profile.name}'")
+        # UPSERT - wstaw nowy lub zaktualizuj istniejący
+        logger.info(f"Creating/updating player profile: '{profile.name}'")
         cursor.execute(
             """
             INSERT INTO players (
@@ -109,7 +92,18 @@ async def create_player(profile: PlayerProfileCreate):
                 strengths, weaknesses, estimated_current_form, team, metadata
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id;
+            ON CONFLICT (name) DO UPDATE SET
+                summary = EXCLUDED.summary,
+                position = EXCLUDED.position,
+                clubs = EXCLUDED.clubs,
+                characteristics = EXCLUDED.characteristics,
+                strengths = EXCLUDED.strengths,
+                weaknesses = EXCLUDED.weaknesses,
+                estimated_current_form = EXCLUDED.estimated_current_form,
+                team = EXCLUDED.team,
+                metadata = EXCLUDED.metadata,
+                updated_at = CURRENT_TIMESTAMP
+            RETURNING id, (xmax = 0) AS inserted;
             """,
             (
                 profile.name,
@@ -125,21 +119,26 @@ async def create_player(profile: PlayerProfileCreate):
             )
         )
         
-        player_id = cursor.fetchone()[0]
+        result = cursor.fetchone()
+        player_id = result[0]
+        was_inserted = result[1]
         
         cursor.close()
         conn.close()
         
-        logger.info(f"Player profile created successfully with ID: {player_id}")
+        status = "created" if was_inserted else "updated"
+        message = f"Profil piłkarza '{profile.name}' został {'utworzony' if was_inserted else 'zaktualizowany'}"
+        
+        logger.info(f"Player profile {status} successfully with ID: {player_id}")
         return PlayerCreateResponse(
-            status="created",
+            status=status,
             player_id=player_id,
-            message=f"Profil piłkarza '{profile.name}' został utworzony"
+            message=message
         )
         
     except Exception as e:
-        logger.error(f"Error creating player profile: {e}")
-        raise HTTPException(status_code=500, detail=f"Błąd podczas tworzenia profilu: {str(e)}")
+        logger.error(f"Error creating/updating player profile: {e}")
+        raise HTTPException(status_code=500, detail=f"Błąd podczas tworzenia/aktualizacji profilu: {str(e)}")
 
 
 @router.get("/search")
