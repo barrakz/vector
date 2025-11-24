@@ -1,81 +1,82 @@
-# Text Chunking Guide
+# Przewodnik Chunkowania Tekstu
 
-This document explains how text chunking works in the Vector Embeddings project and why it's essential for effective RAG (Retrieval-Augmented Generation).
+Ten dokument wyjaśnia jak działa chunking tekstu w projekcie Vector Embeddings i dlaczego jest niezbędny dla efektywnego RAG (Retrieval-Augmented Generation).
 
-## What is Text Chunking?
+## Czym Jest Chunking Tekstu?
 
-Text chunking is the process of splitting long documents into smaller, overlapping segments before generating embeddings. Instead of creating one embedding for an entire document, we create multiple embeddings for smaller chunks.
+Chunking tekstu to proces dzielenia długich dokumentów na mniejsze, nakładające się segmenty przed generowaniem embeddingów. Zamiast tworzyć jeden embedding dla całego dokumentu, tworzymy wiele embeddingów dla mniejszych chunków.
 
-## Why Use Chunking?
+## Dlaczego Używać Chunkingu?
 
-### 1. **Better Semantic Precision**
-- Long documents cover multiple topics
-- Chunking allows each topic to have its own embedding
-- Search results are more precise and relevant
+### 1. **Lepsza Precyzja Semantyczna**
+- Długie dokumenty obejmują wiele tematów
+- Chunking pozwala każdemu tematowi mieć własny embedding
+- Wyniki wyszukiwania są bardziej precyzyjne i relevantne
 
-### 2. **Improved Context Retrieval**
-- When searching, you retrieve specific relevant sections
-- Not the entire document (which may contain irrelevant information)
-- Better for RAG applications where context matters
+### 2. **Ulepszone Wyszukiwanie Kontekstu**
+- Podczas wyszukiwania, otrzymujesz konkretne relevantne sekcje
+- Nie cały dokument (który może zawierać nieistotne informacje)
+- Lepsze dla aplikacji RAG gdzie kontekst ma znaczenie
 
-### 3. **Embedding Model Limitations**
-- Most embedding models have token limits
-- Very long texts may lose semantic meaning
-- Chunking keeps each piece within optimal size
+### 3. **Ograniczenia Modeli Embeddingów**
+- Większość modeli embeddingów ma limity tokenów
+- Bardzo długie teksty mogą tracić znaczenie semantyczne
+- Chunking utrzymuje każdy fragment w optymalnym rozmiarze
 
-## How It Works in This Project
+## Jak To Działa w Tym Projekcie
 
-### Chunking Parameters
-
+### Parametry Chunkowania
 ```python
-chunk_size = 300    # words per chunk
-overlap = 50        # overlapping words between chunks
+chunk_size = 60     # słów na chunk (około 2-3 zdania)
+overlap = 15        # nakładających się słów między chunkami
 ```
 
-### Example
+### Przykład
 
-Given a 500-word document:
+Dla dokumentu 500-słownego:
 
 ```
-Chunk 1: words 0-299     (300 words)
-Chunk 2: words 250-549   (300 words, 50 overlap with Chunk 1)
-Chunk 3: words 500-end   (remaining words)
+Chunk 1: słowa 0-59      (60 słów)
+Chunk 2: słowa 45-104    (60 słów, 15 nakładki z Chunk 1)
+Chunk 3: słowa 90-149    (60 słów, 15 nakładki z Chunk 2)
+...
 ```
 
-### Why Overlap?
+### Dlaczego Nakładka?
 
-**Overlapping chunks preserve context across boundaries:**
+**Nakładające się chunki zachowują kontekst na granicach:**
 
-- Without overlap: "...end of sentence" | "Beginning of next..."
-- With overlap: "...end of sentence. Beginning of next..." | "Beginning of next sentence..."
+- Bez nakładki: "...koniec zdania" | "Początek następnego..."
+- Z nakładką: "...koniec zdania. Początek następnego..." | "Początek następnego zdania..."
 
-This prevents losing meaning when a key concept spans chunk boundaries.
+To zapobiega utracie znaczenia gdy kluczowa koncepcja rozciąga się na granice chunków.
 
-## Implementation Details
+## Szczegóły Implementacji
 
-### Code Location
+### Lokalizacja Kodu
 
-The chunking logic is in [`api/app/chunking.py`](../api/app/chunking.py):
+Logika chunkowania znajduje się w [`api/app/chunking.py`](../../api/app/chunking.py):
 
 ```python
 def chunk_text(
     text: str, 
-    chunk_size: int = 300, 
-    overlap: int = 50
+    chunk_size: int = 60, 
+    overlap: int = 15
 ) -> List[str]:
-    """Split text into overlapping chunks based on word count."""
-    # Implementation...
+    """Dzieli tekst na nakładające się chunki na podstawie liczby słów."""
+    # Implementacja...
 ```
 
-### Database Structure
+### Struktura Bazy Danych
 
-Chunks are stored in a dedicated table:
+Chunki są przechowywane w dedykowanej tabeli:
 
 ```sql
 CREATE TABLE chunks (
     id SERIAL PRIMARY KEY,
     document_id INTEGER REFERENCES documents(id) ON DELETE CASCADE,
     chunk_index INTEGER NOT NULL,
+    title TEXT NOT NULL,
     body TEXT NOT NULL,
     embedding vector(384),
     metadata JSONB,
@@ -83,64 +84,64 @@ CREATE TABLE chunks (
 );
 ```
 
-**Key points:**
-- Each chunk has its own embedding
-- `chunk_index` preserves order
-- `document_id` links chunks to parent document
-- Cascade delete removes chunks when document is deleted
+**Kluczowe punkty:**
+- Każdy chunk ma własny embedding
+- `chunk_index` zachowuje kolejność
+- `document_id` łączy chunki z dokumentem nadrzędnym
+- Kaskadowe usuwanie usuwa chunki gdy dokument jest usunięty
 
-### Ingestion Flow
+### Przepływ Ingestion
 
-When you POST to `/ingest`:
+Kiedy wysyłasz POST do `/ingest`:
 
-1. **Document received** (title, body, metadata)
-2. **Check for duplicates** (by URL in metadata)
-3. **Chunk the text** using `chunk_text(body, 300, 50)`
-4. **Generate embeddings** for each chunk
-5. **Store in database**:
-   - Parent document in `documents` table
-   - Chunks in `chunks` table
-6. **Return response** with `document_id` and `chunks_inserted`
+1. **Dokument otrzymany** (title, body, metadata)
+2. **Sprawdzenie duplikatów** (po URL w metadata)
+3. **Chunking tekstu** używając `chunk_text(body, 60, 15)`
+4. **Generowanie embeddingów** dla każdego chunka
+5. **Zapis w bazie danych**:
+   - Dokument nadrzędny w tabeli `documents`
+   - Chunki w tabeli `chunks`
+6. **Zwrócenie odpowiedzi** z `document_id` i `chunks_inserted`
 
-### Search Flow
+### Przepływ Wyszukiwania
 
-When you GET `/search?q=query`:
+Kiedy wysyłasz GET `/search?q=zapytanie`:
 
-1. **Generate query embedding**
-2. **Search chunks table** (not documents)
-3. **Find most similar chunks** using vector distance
-4. **Return results** with chunk content and metadata
+1. **Generowanie embeddingu zapytania**
+2. **Przeszukiwanie tabeli chunks** (nie documents)
+3. **Znajdowanie najbardziej podobnych chunków** używając odległości wektorowej
+4. **Zwrócenie wyników** z zawartością chunka i metadata
 
-## Adjusting Chunking Parameters
+## Dostosowywanie Parametrów Chunkowania
 
-You can modify chunking behavior in [`api/app/main.py`](../api/app/main.py):
+Możesz modyfikować zachowanie chunkowania w [`api/app/main.py`](../../api/app/main.py):
 
 ```python
-# Current default
-chunks = chunk_text(request.body, chunk_size=300, overlap=50)
+# Obecne domyślne
+chunks = chunk_text(request.body, chunk_size=60, overlap=15)
 
-# For shorter chunks (more precise, more chunks)
-chunks = chunk_text(request.body, chunk_size=200, overlap=40)
+# Dla krótszych chunków (bardziej precyzyjne, więcej chunków)
+chunks = chunk_text(request.body, chunk_size=40, overlap=10)
 
-# For longer chunks (less chunks, more context per chunk)
-chunks = chunk_text(request.body, chunk_size=500, overlap=100)
+# Dla dłuższych chunków (mniej chunków, więcej kontekstu na chunk)
+chunks = chunk_text(request.body, chunk_size=100, overlap=25)
 ```
 
-### Recommendations
+### Rekomendacje
 
-| Document Type | Chunk Size | Overlap | Reason |
-|---------------|------------|---------|--------|
-| Short articles | 200-300 | 30-50 | Precise retrieval |
-| Long articles | 300-500 | 50-100 | More context |
-| Technical docs | 400-600 | 80-120 | Preserve code/examples |
-| FAQ/Q&A | 100-200 | 20-40 | Each Q&A separate |
+| Typ Dokumentu | Rozmiar Chunka | Nakładka | Powód |
+|---------------|----------------|----------|-------|
+| Krótkie odpowiedzi | 60-80 | 15-20 | Precyzyjne wyszukiwanie (2-3 zdania) |
+| Standardowe artykuły | 100-200 | 30-50 | Balans kontekstu i precyzji |
+| Długie analizy | 300-500 | 50-100 | Głęboki kontekst |
+| Dokumentacja techniczna | 200-400 | 50-80 | Zachowanie kodu/przykładów |
 
-## Testing Chunking
+## Testowanie Chunkowania
 
-### View Chunks in Database
+### Zobacz Chunki w Bazie Danych
 
 ```bash
-docker exec vector_db psql -U app -d app -c "
+docker exec -it vector_db psql -U app -d app -c "
   SELECT 
     d.id as doc_id,
     d.title,
@@ -155,10 +156,10 @@ docker exec vector_db psql -U app -d app -c "
 "
 ```
 
-### View Specific Chunks
+### Zobacz Konkretne Chunki
 
 ```bash
-docker exec vector_db psql -U app -d app -c "
+docker exec -it vector_db psql -U app -d app -c "
   SELECT 
     chunk_index,
     LEFT(body, 100) as chunk_preview,
@@ -169,26 +170,26 @@ docker exec vector_db psql -U app -d app -c "
 "
 ```
 
-## Common Questions
+## Częste Pytania
 
-### Q: Why not just embed the whole document?
+### P: Dlaczego nie po prostu embeddować całego dokumentu?
 
-**A:** Long documents often cover multiple topics. If you search for "cat food", you want the chunk about cat food, not a 5000-word article where cat food is mentioned once.
+**O:** Długie dokumenty często obejmują wiele tematów. Jeśli szukasz "karma dla kota", chcesz chunk o karmie dla kota, nie artykuł 5000-słowny gdzie karma dla kota jest wspomniana raz.
 
-### Q: What happens to very short documents?
+### P: Co się dzieje z bardzo krótkimi dokumentami?
 
-**A:** If a document is shorter than `chunk_size`, it's stored as a single chunk. No splitting occurs.
+**O:** Jeśli dokument jest krótszy niż `chunk_size`, jest przechowywany jako pojedynczy chunk. Nie następuje dzielenie.
 
-### Q: Can I disable chunking?
+### P: Czy mogę wyłączyć chunking?
 
-**A:** Yes, set `chunk_size` to a very large number (e.g., 10000). But this defeats the purpose of RAG and may reduce search quality.
+**O:** Tak, ustaw `chunk_size` na bardzo dużą liczbę (np. 10000). Ale to niweluje cel RAG i może zmniejszyć jakość wyszukiwania.
 
-### Q: How does chunking affect search results?
+### P: Jak chunking wpływa na wyniki wyszukiwania?
 
-**A:** Search returns **chunks**, not documents. Each result is a chunk with its `chunk_index` and parent `document_id`. This gives you the exact relevant section.
+**O:** Wyszukiwanie zwraca **chunki**, nie dokumenty. Każdy wynik to chunk z jego `chunk_index` i nadrzędnym `document_id`. To daje Ci dokładną relevantną sekcję.
 
-## Further Reading
+## Dalsze Czytanie
 
-- [SEARCH_ENDPOINT_GUIDE.md](SEARCH_ENDPOINT_GUIDE.md) - How search works with chunks
-- [DOKUMENTACJA_TECHNICZNA.md](../technical/DOKUMENTACJA_TECHNICZNA.md) - Technical implementation details
-- [RAG Best Practices](https://www.pinecone.io/learn/chunking-strategies/) - External resource on chunking strategies
+- [SEARCH_ENDPOINT_GUIDE.md](SEARCH_ENDPOINT_GUIDE.md) - Jak działa wyszukiwanie z chunkami
+- [DOKUMENTACJA_TECHNICZNA.md](../technical/DOKUMENTACJA_TECHNICZNA.md) - Szczegóły implementacji technicznej
+- [RAG Best Practices](https://www.pinecone.io/learn/chunking-strategies/) - Zewnętrzne źródło o strategiach chunkowania

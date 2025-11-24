@@ -1,85 +1,85 @@
-# Vector Embeddings Demo with FastAPI, PostgreSQL, and pgvector
+# Vector Embeddings Demo z FastAPI, PostgreSQL i pgvector
 
-This is a learning project that demonstrates:
-- **Vector embeddings** using **local sentence-transformers** model (no API key needed!)
-- **Semantic search** with pgvector in PostgreSQL
-- **JSONB** for flexible document metadata
-- **FastAPI** for the REST API
-- **n8n** for workflow automation with webhook-based article ingestion
-- **Application logging** to track all operations
+To jest projekt edukacyjny, który demonstruje:
+- **Embeddingi wektorowe** używając **lokalnego modelu sentence-transformers** (bez klucza API!)
+- **Wyszukiwanie semantyczne** z pgvector w PostgreSQL
+- **JSONB** dla elastycznych metadanych dokumentów
+- **FastAPI** dla REST API
+- **n8n** dla automatyzacji workflow z ingestion artykułów przez webhook
+- **Logowanie aplikacji** do śledzenia wszystkich operacji
 
-All services run in Docker for easy local development.
-
----
-
-## Features
-
-✅ **RAG-ready chunking** - Documents split into ~300 word chunks for precise retrieval  
-✅ **Multilingual support** - Works with Polish, English, and 50+ languages  
-✅ **No API costs** - Uses local `paraphrase-multilingual-MiniLM-L12-v2` model  
-✅ **Duplicate detection** - Automatically prevents duplicate URLs  
-✅ **Webhook ingestion** - Add articles via n8n workflows  
-✅ **Application logging** - Track all operations in `api/app.log`  
-✅ **Semantic search** - Find relevant text fragments, not just keywords  
+Wszystkie usługi działają w Docker dla łatwego lokalnego developmentu.
 
 ---
 
-## Prerequisites
+## Funkcjonalności
 
-- macOS with Docker Desktop installed and running
-- **No API key needed!** Everything runs locally.
+✅ **Chunking gotowy dla RAG** - Dokumenty dzielone na fragmenty ~60 słów dla precyzyjnego wyszukiwania  
+✅ **Wsparcie wielojęzyczne** - Działa z polskim, angielskim i 50+ językami  
+✅ **Bez kosztów API** - Używa lokalnego modelu `paraphrase-multilingual-MiniLM-L12-v2`  
+✅ **Wykrywanie duplikatów** - Automatycznie zapobiega duplikacji URL  
+✅ **Ingestion przez webhook** - Dodawaj artykuły przez workflow n8n  
+✅ **Logowanie aplikacji** - Śledź wszystkie operacje w `api/app.log`  
+✅ **Wyszukiwanie semantyczne** - Znajdź relevantne fragmenty tekstu, nie tylko słowa kluczowe  
 
 ---
 
-## Setup
+## Wymagania
 
-### 1. Configure environment variables (optional)
+- macOS z zainstalowanym i uruchomionym Docker Desktop
+- **Bez klucza API!** Wszystko działa lokalnie.
 
-The `.env` file is optional since we use local embeddings:
+---
+
+## Instalacja
+
+### 1. Skonfiguruj zmienne środowiskowe (opcjonalne)
+
+Plik `.env` jest opcjonalny, ponieważ używamy lokalnych embeddingów:
 
 ```bash
 cp .env.example .env
 ```
 
-### 2. Build and run the Docker stack
+### 2. Zbuduj i uruchom stack Docker
 
-From this directory, run:
+Z tego katalogu uruchom:
 
 ```bash
 docker compose up --build
 ```
 
-This will start three services:
-- **PostgreSQL** with pgvector extension (port 5432)
+To uruchomi trzy usługi:
+- **PostgreSQL** z rozszerzeniem pgvector (port 5432)
 - **FastAPI** backend (port 8000)
-- **n8n** workflow automation (port 5678)
+- **n8n** automatyzacja workflow (port 5678)
 
-Wait until you see logs indicating all services are ready (typically 20-30 seconds).
+Poczekaj aż zobaczysz logi wskazujące, że wszystkie usługi są gotowe (zazwyczaj 20-30 sekund).
 
 ---
 
-## Services
+## Usługi
 
-Once running, you can access:
+Po uruchomieniu możesz uzyskać dostęp do:
 
 ### FastAPI API
 - **URL**: http://localhost:8000
-- **Interactive docs**: http://localhost:8000/docs (Swagger UI)
-- **Alternative docs**: http://localhost:8000/redoc
+- **Interaktywna dokumentacja**: http://localhost:8000/docs (Swagger UI)
+- **Alternatywna dokumentacja**: http://localhost:8000/redoc
 
-### n8n Workflow Automation
+### n8n Automatyzacja Workflow
 - **URL**: http://localhost:5678
 - **Login**: 
-  - Username: `admin`
-  - Password: `admin`
+  - Nazwa użytkownika: `admin`
+  - Hasło: `admin`
 
 ---
 
-## Testing the API
+## Testowanie API
 
-### Example 1: Ingest a document
+### Przykład 1: Dodaj dokument
 
-Add a document about cats and dogs (in Polish):
+Dodaj dokument o kotach i psach (po polsku):
 
 ```bash
 curl -X POST http://localhost:8000/ingest \
@@ -91,7 +91,7 @@ curl -X POST http://localhost:8000/ingest \
   }'
 ```
 
-Response:
+Odpowiedź:
 ```json
 {
   "status": "ok",
@@ -100,7 +100,7 @@ Response:
 }
 ```
 
-Add another document:
+Dodaj kolejny dokument:
 
 ```bash
 curl -X POST http://localhost:8000/ingest \
@@ -112,7 +112,7 @@ curl -X POST http://localhost:8000/ingest \
   }'
 ```
 
-And one more (in English):
+I jeszcze jeden (po angielsku):
 
 ```bash
 curl -X POST http://localhost:8000/ingest \
@@ -124,29 +124,29 @@ curl -X POST http://localhost:8000/ingest \
   }'
 ```
 
-### Example 2: Semantic search
+### Przykład 2: Wyszukiwanie semantyczne
 
-Search for documents about cats (in Polish):
+Wyszukaj dokumenty o kotach (po polsku):
 
 ```bash
 curl "http://localhost:8000/search?q=kot&limit=3"
 ```
 
-Or about dogs (in English):
+Lub o psach (po angielsku):
 
 ```bash
 curl "http://localhost:8000/search?q=dog&limit=3"
 ```
 
-Or about recipes/cooking:
+Lub o przepisach/gotowaniu:
 
 ```bash
 curl "http://localhost:8000/search?q=gotowanie&limit=3"
 ```
 
-The API will return documents sorted by semantic similarity (lowest distance = most similar).
+API zwróci dokumenty posortowane według podobieństwa semantycznego (najniższa odległość = najbardziej podobne).
 
-### Example 3: List all documents
+### Przykład 3: Lista wszystkich dokumentów
 
 ```bash
 curl http://localhost:8000/documents
@@ -154,24 +154,24 @@ curl http://localhost:8000/documents
 
 ---
 
-## Using n8n Workflows
+## Używanie Workflow n8n
 
-The project includes ready-to-use n8n workflows for automated article ingestion.
+Projekt zawiera gotowe do użycia workflow n8n dla automatycznej ingestion artykułów.
 
-### Import Workflows
+### Import Workflow
 
-1. Open n8n: http://localhost:5678 (login: `admin` / `admin`)
-2. Click **three dots** (top right) → **Import from File**
-3. Import files from `n8n_workflows/`:
-   - `1_ingest_from_url.json` - Fetch and ingest articles from URLs
-   - `2_search_documents.json` - Search the vector database
+1. Otwórz n8n: http://localhost:5678 (login: `admin` / `admin`)
+2. Kliknij **trzy kropki** (prawy górny róg) → **Import from File**
+3. Zaimportuj pliki z `n8n_workflows/`:
+   - `1_ingest_from_url.json` - Pobierz i dodaj artykuły z URL
+   - `2_search_documents.json` - Przeszukuj bazę wektorową
 
-### Using the Webhook Workflow
+### Używanie Workflow Webhook
 
-The **Ingest from URL** workflow accepts POST requests:
+Workflow **Ingest from URL** akceptuje requesty POST:
 
 **URL**: `http://localhost:5678/webhook/ingest-url`  
-**Method**: `POST`  
+**Metoda**: `POST`  
 **Body**:
 ```json
 {
@@ -179,128 +179,133 @@ The **Ingest from URL** workflow accepts POST requests:
 }
 ```
 
-**Example with curl**:
+**Przykład z curl**:
 ```bash
 curl -X POST http://localhost:5678/webhook/ingest-url \
   -H "Content-Type: application/json" \
   -d '{"url": "https://weszlo.com/sylvinho-trener-reprezentacji-albanii-to-on-sprobuje-ograc-urbana/"}'
 ```
 
-The workflow will:
-1. Fetch the HTML from the URL
-2. Extract title and paragraphs
-3. Send to the vector API
-4. **Skip if URL already exists** (duplicate detection)
+Workflow:
+1. Pobierze HTML z URL
+2. Wyciągnie tytuł i paragrafy
+3. Wyśle do vector API
+4. **Pominie jeśli URL już istnieje** (wykrywanie duplikatów)
 
-See `N8N_WORKFLOW_DOCS.md` for detailed n8n documentation.
+Zobacz `docs/workflows/N8N_WORKFLOW_DOCS.md` dla szczegółowej dokumentacji n8n.
 
 ---
 
-## Application Logging
+## Logowanie Aplikacji
 
-All operations are logged to `api/app.log`. View logs:
+Wszystkie operacje są logowane do `api/app.log`. Zobacz logi:
 
 ```bash
 cat api/app.log
 ```
 
-Or in real-time:
+Lub w czasie rzeczywistym:
 ```bash
 tail -f api/app.log
 ```
 
-Log entries include:
-- Document ingestion (title, metadata, URL)
-- Duplicate detection (skipped URLs)
-- Search queries (query text, result count)
-- Errors and warnings
+Wpisy logów zawierają:
+- Ingestion dokumentów (tytuł, metadata, URL)
+- Wykrywanie duplikatów (pominięte URL)
+- Zapytania wyszukiwania (tekst zapytania, liczba wyników)
+- Błędy i ostrzeżenia
 
 ---
 
-## How It Works
+## Jak To Działa
 
-### 1. Document Ingestion (`POST /ingest`)
+### 1. Ingestion Dokumentów (`POST /ingest`)
 
-When you send a document:
-1. The **FastAPI app** checks if a document with the same URL already exists
-2. If it exists, returns the existing document ID (no duplicate)
-3. Otherwise, the document **body is split into chunks** (~300 words each, 50 word overlap)
-4. Each chunk gets its own **384-dimensional vector embedding** using the local `paraphrase-multilingual-MiniLM-L12-v2` model
-5. Chunks are stored in **PostgreSQL** with:
-   - `title` (inherited from document)
-   - `body` (the chunk text, ~300 words)
-   - `metadata` as **JSONB** (flexible JSON storage)
-   - `embedding` as **vector(384)** in a pgvector column
-   - `document_id` (link to parent document)
-   - `chunk_index` (position in document)
+Kiedy wysyłasz dokument:
+1. **Aplikacja FastAPI** sprawdza czy dokument z tym samym URL już istnieje
+2. Jeśli istnieje, zwraca istniejący document ID (bez duplikatu)
+3. W przeciwnym razie, **body dokumentu jest dzielone na chunki** (~60 słów każdy, 15 słów nakładki)
+4. Każdy chunk otrzymuje swój własny **384-wymiarowy embedding wektorowy** używając lokalnego modelu `paraphrase-multilingual-MiniLM-L12-v2`
+5. Chunki są przechowywane w **PostgreSQL** z:
+   - `title` (dziedziczone z dokumentu)
+   - `body` (tekst chunka, ~60 słów)
+   - `metadata` jako **JSONB** (elastyczne przechowywanie JSON)
+   - `embedding` jako **vector(384)** w kolumnie pgvector
+   - `document_id` (link do dokumentu nadrzędnego)
+   - `chunk_index` (pozycja w dokumencie)
 
-**Why chunking?** This enables RAG (Retrieval-Augmented Generation) by returning precise, relevant text fragments instead of entire documents.
+**Dlaczego chunking?** To umożliwia RAG (Retrieval-Augmented Generation) poprzez zwracanie precyzyjnych, relevantnych fragmentów tekstu zamiast całych dokumentów.
 
-### 2. Semantic Search (`GET /search`)
+### 2. Wyszukiwanie Semantyczne (`GET /search`)
 
-When you search:
-1. The query text is converted to a vector using the **local multilingual model** (no API call!)
-2. PostgreSQL searches the **chunks table** using the **`<->` operator** (L2 distance) to find chunks with similar embeddings
-3. Results are ordered by distance (lower = more similar)
-4. The API returns the most relevant **text fragments** (chunks), not entire documents
+Kiedy wyszukujesz:
+1. Tekst zapytania jest konwertowany na wektor używając **lokalnego modelu wielojęzycznego** (bez wywołania API!)
+2. PostgreSQL przeszukuje **tabelę chunks** używając **operatora `<->`** (odległość L2) aby znaleźć chunki z podobnymi embeddingami
+3. Wyniki są sortowane według odległości (niższa = bardziej podobne)
+4. API zwraca najbardziej relevantne **fragmenty tekstu** (chunki), nie całe dokumenty
 
-**This means the search understands meaning**, not just keywords! For example, searching for "karmienie kota" (feeding a cat in Polish) will find specific chunks about cat feeding, even if the exact phrase differs.
+**To oznacza, że wyszukiwanie rozumie znaczenie**, nie tylko słowa kluczowe! Na przykład, wyszukiwanie "karmienie kota" znajdzie konkretne chunki o karmieniu kotów, nawet jeśli dokładna fraza się różni.
 
-**Perfect for RAG:** Each result is a ~300 word fragment that can be directly used as context for LLMs.
+**Idealne dla RAG:** Każdy wynik to fragment ~60 słów, który może być bezpośrednio użyty jako kontekst dla LLM.
 
-### 3. JSONB Metadata
+### 3. Metadata JSONB
 
-Each document can have flexible metadata stored as JSONB. This allows:
-- Fast queries on JSON fields (using GIN index)
-- Flexible schema (no need to predefine all fields)
-- Example queries you could run in SQL: 
+Każdy dokument może mieć elastyczne metadata przechowywane jako JSONB. To pozwala na:
+- Szybkie zapytania na polach JSON (używając indeksu GIN)
+- Elastyczny schemat (nie trzeba predefiniować wszystkich pól)
+- Przykładowe zapytania SQL: 
   ```sql
   SELECT * FROM documents WHERE metadata->>'category' = 'animals';
   ```
 
 ### 4. pgvector
 
-The `pgvector` extension adds:
-- A `vector` data type for storing embeddings
-- Distance operators: `<->` (L2), `<=>` (cosine), `<#>` (inner product)
-- Specialized indexes (IVFFlat, HNSW) for fast similarity search
+Rozszerzenie `pgvector` dodaje:
+- Typ danych `vector` do przechowywania embeddingów
+- Operatory odległości: `<->` (L2), `<=>` (cosine), `<#>` (iloczyn skalarny)
+- Specjalizowane indeksy (IVFFlat, HNSW) dla szybkiego wyszukiwania podobieństwa
 
 ---
 
-## Project Structure
+## Struktura Projektu
 
 ```
 /Users/brakuzy/Code/personal/vector/
-├── docker-compose.yml       # Defines the 3 services (db, api, n8n)
-├── .env.example             # Template for environment variables
-├── .env                     # Your actual config (git-ignored, optional)
-├── .gitignore               # Git ignore rules
-├── README.md                # This file
-├── DOKUMENTACJA_TECHNICZNA.md  # Technical documentation (Polish)
-├── N8N_WORKFLOW_DOCS.md     # n8n workflow documentation (Polish)
-├── n8n_workflows/           # Ready-to-import n8n workflows
+├── docker-compose.yml       # Definiuje 3 usługi (db, api, n8n)
+├── .env.example             # Szablon zmiennych środowiskowych
+├── .env                     # Twoja aktualna konfiguracja (git-ignored, opcjonalne)
+├── .gitignore               # Reguły git ignore
+├── README.md                # Ten plik
+├── CHANGELOG.md             # Historia zmian
+├── docs/                    # Dokumentacja projektu
+│   ├── README.md            # Indeks dokumentacji
+│   ├── technical/           # Dokumentacja techniczna
+│   ├── workflows/           # Dokumentacja n8n
+│   └── guides/              # Przewodniki użytkownika
+├── n8n_workflows/           # Gotowe do importu workflow n8n
 │   ├── 1_ingest_from_url.json
 │   └── 2_search_documents.json
 └── api/
-    ├── Dockerfile           # Builds the FastAPI container
-    ├── requirements.txt     # Python dependencies
+    ├── Dockerfile           # Buduje kontener FastAPI
+    ├── requirements.txt     # Zależności Python
     └── app/
-        ├── main.py          # FastAPI app with endpoints
-        ├── db.py            # Database connection helper
-        └── app.log          # Application logs (auto-created)
+        ├── main.py          # Aplikacja FastAPI z endpointami
+        ├── db.py            # Helper połączenia z bazą danych
+        ├── chunking.py      # Algorytm chunkowania tekstu
+        └── app.log          # Logi aplikacji (auto-tworzone)
 ```
 
 ---
 
-## Stopping the Services
+## Zatrzymywanie Usług
 
-Press `Ctrl+C` in the terminal where `docker compose` is running, or run:
+Naciśnij `Ctrl+C` w terminalu gdzie działa `docker compose`, lub uruchom:
 
 ```bash
 docker compose down
 ```
 
-To remove all data (database + n8n volumes):
+Aby usunąć wszystkie dane (baza danych + wolumeny n8n):
 
 ```bash
 docker compose down -v
@@ -310,154 +315,154 @@ docker compose down -v
 
 ## Chunking & RAG
 
-This implementation uses **text chunking** to enable RAG (Retrieval-Augmented Generation):
+Ta implementacja używa **chunkowania tekstu** aby umożliwić RAG (Retrieval-Augmented Generation):
 
-- **Chunk size**: 300 words (configurable in `api/app/chunking.py`)
-- **Overlap**: 50 words (preserves context between chunks)
-- **Benefits**: Returns precise, relevant fragments instead of entire documents
+- **Rozmiar chunka**: 60 słów (konfigurowalne w `api/app/chunking.py`)
+- **Nakładka**: 15 słów (zachowuje kontekst między chunkami)
+- **Korzyści**: Zwraca precyzyjne, relevantne fragmenty (2-3 zdania) zamiast całych dokumentów
 
-### Why Chunking?
+### Dlaczego Chunking?
 
-**Without chunking:**
-- Search returns entire 5000-word article
-- Relevant info buried in middle
-- Too much text for LLM context
+**Bez chunkowania:**
+- Wyszukiwanie zwraca cały artykuł 5000 słów
+- Relevantna informacja zakopana w środku
+- Za dużo tekstu dla kontekstu LLM
 
-**With chunking:**
-- Search returns specific 300-word fragment
-- Precise semantic matching
-- Perfect size for LLM context
-- Multiple relevant chunks from same document possible
+**Z chunkowaniem:**
+- Wyszukiwanie zwraca konkretny fragment 60 słów
+- Precyzyjne dopasowanie semantyczne
+- Idealny rozmiar dla kontekstu LLM
+- Możliwe wiele relevantnych chunków z tego samego dokumentu
 
-### Changing Chunk Size
+### Zmiana Rozmiaru Chunka
 
-Edit `api/app/chunking.py`:
+Edytuj `api/app/chunking.py`:
 ```python
-def chunk_text(text: str, chunk_size: int = 300, overlap: int = 50):
-    # Adjust chunk_size and overlap as needed
+def chunk_text(text: str, chunk_size: int = 60, overlap: int = 15):
+    # Dostosuj chunk_size i overlap według potrzeb
 ```
 
 ---
 
-## Multilingual Support
+## Wsparcie Wielojęzyczne
 
-The project uses `paraphrase-multilingual-MiniLM-L12-v2` which supports 50+ languages including:
-- Polish (Polski)
-- English
-- German, French, Spanish, Italian
-- And many more
+Projekt używa `paraphrase-multilingual-MiniLM-L12-v2` który wspiera 50+ języków w tym:
+- Polski
+- Angielski
+- Niemiecki, Francuski, Hiszpański, Włoski
+- I wiele więcej
 
-### Changing the Model
+### Zmiana Modelu
 
-To use a different model, edit `api/app/main.py`:
+Aby użyć innego modelu, edytuj `api/app/main.py`:
 
 ```python
-# Current: Multilingual (50+ languages, 384 dimensions)
+# Obecny: Wielojęzyczny (50+ języków, 384 wymiary)
 model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
 
-# Alternative: English-only (faster, smaller)
+# Alternatywa: Tylko angielski (szybszy, mniejszy)
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
-# Alternative: Best quality multilingual (768 dimensions - requires DB schema change!)
+# Alternatywa: Najlepsza jakość wielojęzyczna (768 wymiarów - wymaga zmiany schematu DB!)
 model = SentenceTransformer("paraphrase-multilingual-mpnet-base-v2")
 ```
 
-**Note:** If changing to a model with different dimensions (e.g., 768), you must also update `vector(384)` to `vector(768)` in `api/app/db.py` and rebuild the database.
+**Uwaga:** Jeśli zmieniasz na model z innymi wymiarami (np. 768), musisz również zaktualizować `vector(384)` na `vector(768)` w `api/app/db.py` i przebudować bazę danych.
 
 ---
 
-## Next Steps
+## Następne Kroki
 
-Now that you have a working setup, you can:
+Teraz gdy masz działającą konfigurację, możesz:
 
-1. **Test RAG workflow**: Ingest long articles, search for specific topics, use results with LLMs
-2. **Experiment with different texts**: Try ingesting documents in different languages
-3. **Test semantic search**: Notice how it finds similar meaning, not just matching words
-4. **Explore JSONB queries**: Add more complex metadata and query it directly in PostgreSQL
-5. **Learn n8n**: Create workflows that automatically ingest documents from external sources
-6. **Adjust chunk size**: Experiment with different chunk sizes for your use case
-7. **Try different models**: Test English-only vs multilingual models
+1. **Przetestować workflow RAG**: Dodaj długie artykuły, wyszukuj konkretne tematy, używaj wyników z LLM
+2. **Eksperymentować z różnymi tekstami**: Spróbuj dodać dokumenty w różnych językach
+3. **Testować wyszukiwanie semantyczne**: Zauważ jak znajduje podobne znaczenie, nie tylko pasujące słowa
+4. **Eksplorować zapytania JSONB**: Dodaj bardziej złożone metadata i zapytuj je bezpośrednio w PostgreSQL
+5. **Uczyć się n8n**: Twórz workflow, które automatycznie dodają dokumenty z zewnętrznych źródeł
+6. **Dostosować rozmiar chunka**: Eksperymentuj z różnymi rozmiarami chunków dla swojego przypadku użycia
+7. **Wypróbować różne modele**: Testuj modele tylko angielskie vs wielojęzyczne
 
 ---
 
-## Useful Commands
+## Przydatne Komendy
 
-### View logs
+### Zobacz logi
 ```bash
-docker compose logs -f api    # FastAPI logs
-docker compose logs -f db     # PostgreSQL logs
-docker compose logs -f n8n    # n8n logs
+docker compose logs -f api    # Logi FastAPI
+docker compose logs -f db     # Logi PostgreSQL
+docker compose logs -f n8n    # Logi n8n
 ```
 
-### View application logs
+### Zobacz logi aplikacji
 ```bash
-cat api/app.log               # All logs
-tail -f api/app.log           # Follow logs in real-time
+cat api/app.log               # Wszystkie logi
+tail -f api/app.log           # Śledź logi w czasie rzeczywistym
 ```
 
-### Connect to PostgreSQL directly
+### Połącz się bezpośrednio z PostgreSQL
 ```bash
 docker exec -it vector_db psql -U app -d app
 ```
 
-Then you can run SQL queries:
+Następnie możesz uruchomić zapytania SQL:
 ```sql
--- View documents table
+-- Zobacz tabelę documents
 SELECT * FROM documents;
 
--- Check for duplicates
+-- Sprawdź duplikaty
 SELECT metadata->>'url' as url, COUNT(*) 
 FROM documents 
 WHERE metadata->>'url' IS NOT NULL 
 GROUP BY metadata->>'url' 
 HAVING COUNT(*) > 1;
 
--- Search using SQL directly
+-- Wyszukaj używając SQL bezpośrednio
 SELECT id, title, embedding <-> '[0.1, 0.2, ...]'::vector AS distance
-FROM documents
+FROM chunks
 ORDER BY distance
 LIMIT 5;
 ```
 
-### Rebuild after code changes
+### Przebuduj po zmianach w kodzie
 ```bash
 docker compose up --build
 ```
 
 ---
 
-## Troubleshooting
+## Rozwiązywanie Problemów
 
-**Problem**: Model loading takes a long time on first start
+**Problem**: Ładowanie modelu trwa długo przy pierwszym starcie
 
-**Solution**: This is normal - the model (~90MB) is downloaded on first run. Subsequent starts are much faster.
+**Rozwiązanie**: To normalne - model (~90MB) jest pobierany przy pierwszym uruchomieniu. Kolejne starty są znacznie szybsze.
 
-**Problem**: Database connection errors
+**Problem**: Błędy połączenia z bazą danych
 
-**Solution**: Wait a bit longer for PostgreSQL to initialize, or restart: `docker compose restart api`
+**Rozwiązanie**: Poczekaj trochę dłużej na inicjalizację PostgreSQL, lub zrestartuj: `docker compose restart api`
 
-**Problem**: n8n not loading
+**Problem**: n8n się nie ładuje
 
-**Solution**: Give it a minute - n8n takes a bit longer to start up on first run
+**Rozwiązanie**: Daj mu minutę - n8n trwa trochę dłużej przy pierwszym uruchomieniu
 
-**Problem**: Duplicate documents in database
+**Problem**: Duplikaty dokumentów w bazie danych
 
-**Solution**: The API now automatically prevents duplicates based on URL. Existing duplicates can be removed via SQL.
-
----
-
-## Documentation
-
-📚 **[Documentation Index](docs/README.md)** - All documentation organized by category
-
-### Quick Links
-
-- **[Technical Documentation](docs/technical/DOKUMENTACJA_TECHNICZNA.md)** - Comprehensive technical guide (Polish)
-- **[n8n Workflows](docs/workflows/N8N_WORKFLOW_DOCS.md)** - Workflow automation guide (Polish)
-- **[Chunking Guide](docs/guides/CHUNKING_GUIDE.md)** - How text chunking works
-- **[Search Guide](docs/guides/SEARCH_ENDPOINT_GUIDE.md)** - Search endpoint documentation
-- **[Changelog](CHANGELOG.md)** - Version history
+**Rozwiązanie**: API teraz automatycznie zapobiega duplikatom na podstawie URL. Istniejące duplikaty można usunąć przez SQL.
 
 ---
 
-Happy learning! 🚀
+## Dokumentacja
+
+📚 **[Indeks Dokumentacji](docs/README.md)** - Cała dokumentacja uporządkowana według kategorii
+
+### Szybkie Linki
+
+- **[Dokumentacja Techniczna](docs/technical/DOKUMENTACJA_TECHNICZNA.md)** - Kompleksowy przewodnik techniczny
+- **[Workflow n8n](docs/workflows/N8N_WORKFLOW_DOCS.md)** - Przewodnik automatyzacji workflow
+- **[Przewodnik Chunkowania](docs/guides/CHUNKING_GUIDE.md)** - Jak działa chunking tekstu
+- **[Przewodnik Wyszukiwania](docs/guides/SEARCH_ENDPOINT_GUIDE.md)** - Dokumentacja endpointu search
+- **[Changelog](CHANGELOG.md)** - Historia wersji
+
+---
+
+Miłej nauki! 🚀

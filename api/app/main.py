@@ -108,7 +108,7 @@ async def ingest_document(request: IngestRequest):
     """
     Ingest a document with RAG-ready chunking: generate embeddings for text chunks and store in PostgreSQL.
     
-    - Chunks the document body into ~300 word fragments with 50 word overlap
+    - Chunks the document body into ~60 word fragments (2-3 sentences) with 15 word overlap
     - Uses sentence-transformers to generate embedding for each chunk
     - Stores chunks with embeddings in pgvector (384 dimensions)
     - Stores document metadata in documents table
@@ -156,7 +156,7 @@ async def ingest_document(request: IngestRequest):
         document_id = cursor.fetchone()[0]
         
         # Chunk the text
-        chunks = chunk_text(request.body, chunk_size=300, overlap=50)
+        chunks = chunk_text(request.body, chunk_size=60, overlap=15)
         logger.info(f"Document split into {len(chunks)} chunks")
         
         # Insert each chunk with its embedding
