@@ -142,6 +142,62 @@ async def create_player(profile: PlayerProfileCreate):
         raise HTTPException(status_code=500, detail=f"Błąd podczas tworzenia profilu: {str(e)}")
 
 
+@router.get("/search")
+async def search_player(name: str):
+    """
+    Wyszukaj piłkarza po nazwisku.
+    
+    Używane przez n8n workflow do sprawdzenia czy profil już istnieje.
+    Zwraca obiekt z polem 'found' i opcjonalnie 'profile'.
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            """
+            SELECT 
+                id, name, summary, position, clubs, characteristics,
+                strengths, weaknesses, estimated_current_form, team,
+                metadata, created_at, updated_at
+            FROM players
+            WHERE name ILIKE %s
+            LIMIT 1;
+            """,
+            (f"%{name}%",)
+        )
+        
+        row = cursor.fetchone()
+        
+        cursor.close()
+        conn.close()
+        
+        if not row:
+            return {"found": False}
+        
+        profile = PlayerProfileResponse(
+            id=row[0],
+            name=row[1],
+            summary=row[2],
+            position=row[3],
+            clubs=row[4],
+            characteristics=row[5],
+            strengths=row[6],
+            weaknesses=row[7],
+            estimated_current_form=row[8],
+            team=row[9],
+            metadata=row[10],
+            created_at=row[11],
+            updated_at=row[12]
+        )
+        
+        return {"found": True, "profile": profile.model_dump()}
+        
+    except Exception as e:
+        logger.error(f"Error searching player: {e}")
+        raise HTTPException(status_code=500, detail=f"Błąd podczas wyszukiwania: {str(e)}")
+
+
 @router.get("/{player_id}", response_model=PlayerProfileResponse)
 async def get_player(player_id: int):
     """
@@ -192,59 +248,6 @@ async def get_player(player_id: int):
     except Exception as e:
         logger.error(f"Error fetching player: {e}")
         raise HTTPException(status_code=500, detail=f"Błąd podczas pobierania profilu: {str(e)}")
-
-
-@router.get("/search", response_model=Optional[PlayerProfileResponse])
-async def search_player(name: str):
-    """
-    Wyszukaj piłkarza po nazwisku.
-    
-    Używane przez n8n workflow do sprawdzenia czy profil już istnieje.
-    """
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute(
-            """
-            SELECT 
-                id, name, summary, position, clubs, characteristics,
-                strengths, weaknesses, estimated_current_form, team,
-                metadata, created_at, updated_at
-            FROM players
-            WHERE name ILIKE %s
-            LIMIT 1;
-            """,
-            (f"%{name}%",)
-        )
-        
-        row = cursor.fetchone()
-        
-        cursor.close()
-        conn.close()
-        
-        if not row:
-            return None
-        
-        return PlayerProfileResponse(
-            id=row[0],
-            name=row[1],
-            summary=row[2],
-            position=row[3],
-            clubs=row[4],
-            characteristics=row[5],
-            strengths=row[6],
-            weaknesses=row[7],
-            estimated_current_form=row[8],
-            team=row[9],
-            metadata=row[10],
-            created_at=row[11],
-            updated_at=row[12]
-        )
-        
-    except Exception as e:
-        logger.error(f"Error searching player: {e}")
-        raise HTTPException(status_code=500, detail=f"Błąd podczas wyszukiwania: {str(e)}")
 
 
 @router.put("/{player_id}", response_model=PlayerProfileResponse)

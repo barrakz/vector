@@ -36,16 +36,14 @@
         {
             "parameters": {
                 "conditions": {
-                    "options": {
-                        "caseSensitive": false
-                    },
+                    "options": {},
                     "conditions": [
                         {
-                            "leftValue": "={{ $json }}",
-                            "rightValue": "",
+                            "leftValue": "={{ $json.found }}",
+                            "rightValue": true,
                             "operator": {
-                                "type": "object",
-                                "operation": "notEmpty"
+                                "type": "boolean",
+                                "operation": "equals"
                             }
                         }
                     ]
@@ -63,7 +61,7 @@
         {
             "parameters": {
                 "respondWith": "json",
-                "responseBody": "={{ { \"status\": \"exists\", \"profile\": $json } }}",
+                "responseBody": "={{ { \"status\": \"exists\", \"profile\": $json.profile } }}",
                 "options": {}
             },
             "id": "respond-exists",
