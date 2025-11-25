@@ -76,13 +76,8 @@ curl -X POST http://localhost:5678/webhook/generate-player \
   "status": "created",
   "profile": {
     "name": "Bartosz Kapustka",
-    "summary": "...",
-    "position": "pomocnik",
-    "clubs": ["Legia Warszawa", "Leicester City", ...],
-    "characteristics": "...",
-    "strengths": "...",
-    "weaknesses": "...",
-    "estimated_current_form": "..."
+    "summary": "Bartosz Kapustka to utalentowany polski pomocnik, który swoją karierę rozpoczynał w Cracovii. Mimo trudności w Leicester City, w Legii Warszawa odbudował swoją pozycję, stając się kluczowym rozgrywającym. Cechuje go świetna technika użytkowa, wizja gry i umiejętność gry kombinacyjnej. Obecnie prezentuje wysoką formę, będąc jednym z liderów Ekstraklasy.",
+    "metadata": { ... }
   }
 }
 ```
@@ -100,13 +95,7 @@ Utwórz nowy profil piłkarza (używane przez n8n).
 ```json
 {
   "name": "Jan Kowalski",
-  "summary": "Polski piłkarz...",
-  "position": "pomocnik",
-  "clubs": ["Legia Warszawa"],
-  "characteristics": "...",
-  "strengths": "...",
-  "weaknesses": "...",
-  "estimated_current_form": "...",
+  "summary": "Jan Kowalski to obiecujący napastnik, który wyróżnia się szybkością i instynktem strzeleckim...",
   "metadata": {}
 }
 ```
@@ -132,8 +121,7 @@ Edytuj profil piłkarza.
 curl -X PUT http://localhost:8000/player/1 \
   -H "Content-Type: application/json" \
   -d '{
-    "characteristics": "Zaktualizowana charakterystyka...",
-    "estimated_current_form": "Bardzo dobra forma"
+    "summary": "Zaktualizowany opis kariery i formy zawodnika..."
   }'
 ```
 
@@ -251,13 +239,6 @@ CREATE TABLE players (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
     summary TEXT NOT NULL,
-    position VARCHAR(100) NOT NULL,
-    clubs TEXT[] NOT NULL,
-    characteristics TEXT NOT NULL,
-    strengths TEXT NOT NULL,
-    weaknesses TEXT NOT NULL,
-    estimated_current_form TEXT NOT NULL,
-    team VARCHAR(255),
     metadata JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -371,12 +352,10 @@ Model otrzymuje precyzyjną instrukcję (prompt), która definiuje jego rolę i 
 Model ma za zadanie:
 1. Przeanalizować tekst z Wikipedii.
 2. Uzupełnić go o **własną wiedzę** (jeśli dane z Wiki są niepełne, a model "zna" zawodnika).
-3. Wygenerować ustrukturyzowany obiekt JSON zawierający:
-   - Podsumowanie kariery
-   - Pozycję
-   - Listę klubów
-   - Charakterystykę gry (styl, mocne/słabe strony)
-   - Ocenę aktualnej formy
+3. Wygenerować ustrukturyzowany obiekt JSON zawierający pole `summary` z opisem (4-5 zdań) uwzględniającym:
+   - Skrót kariery
+   - Charakterystykę gry
+   - Ocenę potencjału/formy
 
 ### 3. Zapis do bazy (UPSERT)
 Wygenerowany JSON jest przesyłany do Twojego API (`POST /player/create`).
@@ -447,13 +426,7 @@ Wikipedia blokuje requesty bez nagłówka `User-Agent`. Workflow ma to już skon
 ```json
 {
   "name": "Bartosz Kapustka",
-  "summary": "Polski piłkarz, pomocnik. Wychowanek Legii Warszawa, reprezentant Polski.",
-  "position": "pomocnik",
-  "clubs": ["Legia Warszawa", "Leicester City", "OH Leuven", "Legia Warszawa"],
-  "characteristics": "Szybki, techniczny pomocnik ofensywny. Dobry drybling i podania.",
-  "strengths": "Szybkość, technika, kreowanie gry",
-  "weaknesses": "Fizyczność, skuteczność w wykańczaniu akcji",
-  "estimated_current_form": "Bardzo dobra, kluczowy zawodnik Legii"
+  "summary": "Bartosz Kapustka to dynamiczny pomocnik, wychowanek Tarnovii, który wypłynął na szerokie wody w Cracovii. Jego kariera wyhamowała po transferze do Leicester City, ale w Legii Warszawa odzyskał radość z gry. Cechuje go świetna technika, wizja gry i umiejętność gry kombinacyjnej. Obecnie prezentuje wysoką formę, będąc liderem drugiej linii Wojskowych."
 }
 ```
 

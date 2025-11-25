@@ -111,13 +111,6 @@ def init_database():
                 id SERIAL PRIMARY KEY,
                 name VARCHAR(255) NOT NULL,
                 summary TEXT NOT NULL,
-                position VARCHAR(100) NOT NULL,
-                clubs TEXT[] NOT NULL DEFAULT '{}',
-                characteristics TEXT NOT NULL,
-                strengths TEXT NOT NULL,
-                weaknesses TEXT NOT NULL,
-                estimated_current_form TEXT NOT NULL,
-                team VARCHAR(255),
                 metadata JSONB DEFAULT '{}',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -130,9 +123,7 @@ def init_database():
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_players_name ON players(name);
         """)
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_players_team ON players(team);
-        """)
+
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_players_metadata ON players USING gin(metadata);
         """)

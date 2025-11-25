@@ -161,7 +161,7 @@
                     "parameters": [
                         {
                             "name": "contents",
-                            "value": "={{ [{ \"parts\": [{ \"text\": `Jesteś ekspertem od piłki nożnej, specjalizujesz się w Ekstraklasie polskiej.\\n\\nZADANIE: Na podstawie poniższych danych z Wikipedii, wygeneruj szczegółowy profil piłkarza.\\n\\nDANE WEJŚCIOWE:\\n- Nazwa piłkarza: ${$json.name}\\n- Dane z Wikipedii dostępne: ${$json.has_wiki_data}\\n- Tekst z Wikipedii (PL/EN): ${$json.raw_wiki_text}\\n- Pozycja (jeśli znaleziona): ${$json.position_from_wiki}\\n\\nINSTRUKCJE:\\n1. Jeśli has_wiki_data = false I nie znasz tego zawodnika:\\n   - Zwróć: { \"known_player\": false, \"message\": \"Brak danych o zawodniku\" }\\n\\n2. Jeśli masz dane z Wikipedii LUB znasz zawodnika:\\n   - Wygeneruj kompletny profil w formacie JSON\\n   - Podsumuj karierę (2-3 zdania)\\n   - Określ pozycję (jeśli brak w danych, użyj swojej wiedzy)\\n   - Wypisz kluby w karierze\\n   - Opisz charakterystykę gry (styl, mocne strony, słabe strony)\\n   - Oszacuj aktualną formę (jeśli znasz ostatnie występy)\\n\\nFORMAT ODPOWIEDZI (JSON):\\n{\\n  \"known_player\": true,\\n  \"name\": \"pełne imię i nazwisko\",\\n  \"summary\": \"krótkie podsumowanie kariery (2-3 zdania)\",\\n  \"position\": \"pozycja na boisku\",\\n  \"clubs\": [\"klub1\", \"klub2\", \"klub3\"],\\n  \"characteristics\": \"opis stylu gry i charakterystyki (3-4 zdania)\",\\n  \"strengths\": \"mocne strony (2-3 punkty)\",\\n  \"weaknesses\": \"słabe strony (2-3 punkty)\",\\n  \"estimated_current_form\": \"ocena aktualnej formy (jeśli znana, w przeciwnym razie 'brak danych')\"\\n}\\n\\nWAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowego tekstu.` }] }] }}"
+                            "value": "={{ [{ \"parts\": [{ \"text\": `Jesteś ekspertem od piłki nożnej, specjalizujesz się w Ekstraklasie polskiej.\\n\\nZADANIE: Na podstawie poniższych danych z Wikipedii, wygeneruj zwięzły profil piłkarza (4-5 zdań).\\n\\nDANE WEJŚCIOWE:\\n- Nazwa piłkarza: ${$json.name}\\n- Dane z Wikipedii dostępne: ${$json.has_wiki_data}\\n- Tekst z Wikipedii (PL/EN): ${$json.raw_wiki_text}\\n- Pozycja (jeśli znaleziona): ${$json.position_from_wiki}\\n\\nINSTRUKCJE:\\n1. Jeśli has_wiki_data = false I nie znasz tego zawodnika:\\n   - Zwróć: { \"known_player\": false, \"message\": \"Brak danych o zawodniku\" }\\n\\n2. Jeśli masz dane z Wikipedii LUB znasz zawodnika:\\n   - Wygeneruj zwięzły opis (summary) o długości 4-5 zdań.\\n   - Opis MUSI zawierać:\\n     - Krótkie podsumowanie kariery\\n     - Charakterystykę gry na boisku\\n     - Ocenę potencjału lub aktualnej formy\\n\\nFORMAT ODPOWIEDZI (JSON):\\n{\\n  \"known_player\": true,\\n  \"name\": \"pełne imię i nazwisko\",\\n  \"summary\": \"Treść opisu (4-5 zdań)...\"\\n}\\n\\nWAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowego tekstu.` }] }] }}"
                         }
                     ]
                 },
@@ -178,7 +178,7 @@
         },
         {
             "parameters": {
-                "jsCode": "// Parse Gemini response\nconst geminiResponse = $input.item.json;\nconst aggregatedData = $('Aggregate Data (with EN)').item.json || $('Aggregate Data (PL only)').item.json;\n\nlet profile = {};\n\ntry {\n  // Extract JSON from Gemini response\n  const text = geminiResponse.candidates[0].content.parts[0].text;\n  \n  // Remove markdown code blocks if present\n  const jsonText = text.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  \n  profile = JSON.parse(jsonText);\n  \n  // Add metadata\n  profile.metadata = {\n    sources: ['wikipedia'],\n    generated_at: new Date().toISOString(),\n    model: 'gemini-2.0-flash',\n    has_wiki_data: aggregatedData.has_wiki_data,\n    image_url: aggregatedData.image_url\n  };\n  \n} catch (error) {\n  // Fallback if parsing fails\n  profile = {\n    known_player: false,\n    message: `Error parsing Gemini response: ${error.message}`\n  };\n}\n\nreturn profile;"
+                "jsCode": "// Parse Gemini response\nconst geminiResponse = $input.item.json;\nconst webhookData = $('Webhook (POST /generate-player)').item.json;\nconst originalName = webhookData.body.name;\n\nlet profile = {};\n\ntry {\n  // Try to get aggregated data safely\n  let aggregatedData = {};\n  try {\n     aggregatedData = $('Aggregate Data (with EN)').item.json;\n  } catch (e) {}\n  \n  if (!aggregatedData || !aggregatedData.name) {\n    try {\n      aggregatedData = $('Aggregate Data (PL only)').item.json;\n    } catch (e) {}\n  }\n  \n  // Default metadata values if aggregation failed\n  const hasWikiData = aggregatedData ? aggregatedData.has_wiki_data : false;\n  const imageUrl = aggregatedData ? aggregatedData.image_url : '';\n\n  // Extract JSON from Gemini response\n  if (geminiResponse.candidates && geminiResponse.candidates[0] && geminiResponse.candidates[0].content) {\n      const text = geminiResponse.candidates[0].content.parts[0].text;\n      // Remove markdown code blocks if present\n      const jsonText = text.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n      profile = JSON.parse(jsonText);\n  } else {\n      throw new Error(\"Invalid Gemini response structure\");\n  }\n  \n  // Ensure name is present\n  if (!profile.name) {\n    profile.name = originalName;\n  }\n\n  // Handle unknown player case - force save with default summary\n  if (profile.known_player === false) {\n    profile.known_player = true;\n    profile.summary = \"Nie znaleziono szczegółowych informacji o zawodniku w dostępnych źródłach (Wikipedia, wiedza modelu).\";\n  }\n\n  // Ensure summary is present\n  if (!profile.summary) {\n    profile.summary = \"Brak wygenerowanego opisu.\";\n  }\n  \n  // Add metadata\n  profile.metadata = {\n    sources: ['wikipedia'],\n    generated_at: new Date().toISOString(),\n    model: 'gemini-2.0-flash',\n    has_wiki_data: hasWikiData,\n    image_url: imageUrl\n  };\n  \n} catch (error) {\n  // Fallback if parsing fails\n  profile = {\n    known_player: true,\n    name: originalName,\n    summary: `Błąd generowania profilu: ${error.message}. Nie znaleziono informacji.`,\n    metadata: {\n      error: true,\n      generated_at: new Date().toISOString()\n    }\n  };\n}\n\nreturn profile;"
             },
             "id": "parse-gemini",
             "name": "Parse Gemini Response",
@@ -229,30 +229,6 @@
                         {
                             "name": "summary",
                             "value": "={{ $json.summary }}"
-                        },
-                        {
-                            "name": "position",
-                            "value": "={{ $json.position }}"
-                        },
-                        {
-                            "name": "clubs",
-                            "value": "={{ $json.clubs }}"
-                        },
-                        {
-                            "name": "characteristics",
-                            "value": "={{ $json.characteristics }}"
-                        },
-                        {
-                            "name": "strengths",
-                            "value": "={{ $json.strengths }}"
-                        },
-                        {
-                            "name": "weaknesses",
-                            "value": "={{ $json.weaknesses }}"
-                        },
-                        {
-                            "name": "estimated_current_form",
-                            "value": "={{ $json.estimated_current_form }}"
                         },
                         {
                             "name": "metadata",

@@ -22,26 +22,12 @@ router = APIRouter(prefix="/player", tags=["player"])
 # Request/Response models
 class PlayerProfileCreate(BaseModel):
     name: str = Field(..., description="Imię i nazwisko piłkarza")
-    summary: Optional[str] = Field(None, description="Krótkie podsumowanie kariery")
-    position: Optional[str] = Field(None, description="Pozycja na boisku")
-    clubs: List[str] = Field(default_factory=list, description="Lista klubów w karierze")
-    characteristics: Optional[str] = Field(None, description="Charakterystyka stylu gry")
-    strengths: Optional[Union[str, List[str]]] = Field(None, description="Mocne strony (tekst lub lista)")
-    weaknesses: Optional[Union[str, List[str]]] = Field(None, description="Słabe strony (tekst lub lista)")
-    estimated_current_form: Optional[str] = Field(None, description="Ocena aktualnej formy")
-    team: Optional[str] = Field(None, description="Obecna drużyna")
+    summary: str = Field(..., description="Szczegółowy opis profilu piłkarza (kariera, charakterystyka, potencjał)")
     metadata: Optional[dict[str, Any]] = Field(default_factory=dict, description="Dodatkowe dane")
 
 
 class PlayerProfileUpdate(BaseModel):
     summary: Optional[str] = None
-    position: Optional[str] = None
-    clubs: Optional[List[str]] = None
-    characteristics: Optional[str] = None
-    strengths: Optional[Union[str, List[str]]] = None
-    weaknesses: Optional[Union[str, List[str]]] = None
-    estimated_current_form: Optional[str] = None
-    team: Optional[str] = None
     metadata: Optional[dict[str, Any]] = None
 
 
@@ -49,13 +35,6 @@ class PlayerProfileResponse(BaseModel):
     id: int
     name: str
     summary: str
-    position: str
-    clubs: List[str]
-    characteristics: str
-    strengths: str
-    weaknesses: str
-    estimated_current_form: str
-    team: Optional[str]
     metadata: Optional[dict[str, Any]]
     created_at: datetime
     updated_at: datetime
@@ -83,49 +62,21 @@ async def create_player(profile: PlayerProfileCreate):
         metadata = profile.metadata or {}
         metadata["generated_at"] = datetime.utcnow().isoformat()
         
-        # Helper to convert list to string if needed
-        def ensure_string(val: Optional[Union[str, List[str]]]) -> str:
-            if val is None:
-                return ""
-            if isinstance(val, list):
-                return ", ".join(val)
-            return val
-
-        strengths_str = ensure_string(profile.strengths)
-        weaknesses_str = ensure_string(profile.weaknesses)
-        
         # UPSERT - wstaw nowy lub zaktualizuj istniejący
         logger.info(f"Creating/updating player profile: '{profile.name}'")
         cursor.execute(
             """
-            INSERT INTO players (
-                name, summary, position, clubs, characteristics,
-                strengths, weaknesses, estimated_current_form, team, metadata
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO players (name, summary, metadata)
+            VALUES (%s, %s, %s)
             ON CONFLICT (name) DO UPDATE SET
                 summary = EXCLUDED.summary,
-                position = EXCLUDED.position,
-                clubs = EXCLUDED.clubs,
-                characteristics = EXCLUDED.characteristics,
-                strengths = EXCLUDED.strengths,
-                weaknesses = EXCLUDED.weaknesses,
-                estimated_current_form = EXCLUDED.estimated_current_form,
-                team = EXCLUDED.team,
                 metadata = EXCLUDED.metadata,
                 updated_at = CURRENT_TIMESTAMP
             RETURNING id, (xmax = 0) AS inserted;
             """,
             (
                 profile.name,
-                profile.summary or "",
-                profile.position or "",
-                profile.clubs,
-                profile.characteristics or "",
-                strengths_str,
-                weaknesses_str,
-                profile.estimated_current_form or "",
-                profile.team,
+                profile.summary,
                 Jsonb(metadata)
             )
         )
@@ -166,10 +117,7 @@ async def search_player(name: str):
         
         cursor.execute(
             """
-            SELECT 
-                id, name, summary, position, clubs, characteristics,
-                strengths, weaknesses, estimated_current_form, team,
-                metadata, created_at, updated_at
+            SELECT id, name, summary, metadata, created_at, updated_at
             FROM players
             WHERE name ILIKE %s
             LIMIT 1;
@@ -189,16 +137,9 @@ async def search_player(name: str):
             id=row[0],
             name=row[1],
             summary=row[2],
-            position=row[3],
-            clubs=row[4],
-            characteristics=row[5],
-            strengths=row[6],
-            weaknesses=row[7],
-            estimated_current_form=row[8],
-            team=row[9],
-            metadata=row[10],
-            created_at=row[11],
-            updated_at=row[12]
+            metadata=row[3],
+            created_at=row[4],
+            updated_at=row[5]
         )
         
         return {"found": True, "profile": profile.model_dump()}
@@ -219,10 +160,7 @@ async def get_player(player_id: int):
         
         cursor.execute(
             """
-            SELECT 
-                id, name, summary, position, clubs, characteristics,
-                strengths, weaknesses, estimated_current_form, team,
-                metadata, created_at, updated_at
+            SELECT id, name, summary, metadata, created_at, updated_at
             FROM players
             WHERE id = %s;
             """,
@@ -241,16 +179,9 @@ async def get_player(player_id: int):
             id=row[0],
             name=row[1],
             summary=row[2],
-            position=row[3],
-            clubs=row[4],
-            characteristics=row[5],
-            strengths=row[6],
-            weaknesses=row[7],
-            estimated_current_form=row[8],
-            team=row[9],
-            metadata=row[10],
-            created_at=row[11],
-            updated_at=row[12]
+            metadata=row[3],
+            created_at=row[4],
+            updated_at=row[5]
         )
         
     except HTTPException:
@@ -285,27 +216,6 @@ async def update_player(player_id: int, updates: PlayerProfileUpdate):
         if updates.summary is not None:
             update_fields.append("summary = %s")
             update_values.append(updates.summary)
-        if updates.position is not None:
-            update_fields.append("position = %s")
-            update_values.append(updates.position)
-        if updates.clubs is not None:
-            update_fields.append("clubs = %s")
-            update_values.append(updates.clubs)
-        if updates.characteristics is not None:
-            update_fields.append("characteristics = %s")
-            update_values.append(updates.characteristics)
-        if updates.strengths is not None:
-            update_fields.append("strengths = %s")
-            update_values.append(updates.strengths)
-        if updates.weaknesses is not None:
-            update_fields.append("weaknesses = %s")
-            update_values.append(updates.weaknesses)
-        if updates.estimated_current_form is not None:
-            update_fields.append("estimated_current_form = %s")
-            update_values.append(updates.estimated_current_form)
-        if updates.team is not None:
-            update_fields.append("team = %s")
-            update_values.append(updates.team)
         if updates.metadata is not None:
             update_fields.append("metadata = %s")
             update_values.append(Jsonb(updates.metadata))
@@ -321,9 +231,7 @@ async def update_player(player_id: int, updates: PlayerProfileUpdate):
             UPDATE players
             SET {', '.join(update_fields)}
             WHERE id = %s
-            RETURNING id, name, summary, position, clubs, characteristics,
-                      strengths, weaknesses, estimated_current_form, team,
-                      metadata, created_at, updated_at;
+            RETURNING id, name, summary, metadata, created_at, updated_at;
         """
         
         cursor.execute(query, update_values)
@@ -338,16 +246,9 @@ async def update_player(player_id: int, updates: PlayerProfileUpdate):
             id=row[0],
             name=row[1],
             summary=row[2],
-            position=row[3],
-            clubs=row[4],
-            characteristics=row[5],
-            strengths=row[6],
-            weaknesses=row[7],
-            estimated_current_form=row[8],
-            team=row[9],
-            metadata=row[10],
-            created_at=row[11],
-            updated_at=row[12]
+            metadata=row[3],
+            created_at=row[4],
+            updated_at=row[5]
         )
         
     except HTTPException:
@@ -396,10 +297,7 @@ async def list_players(limit: int = 50, offset: int = 0):
         
         cursor.execute(
             """
-            SELECT 
-                id, name, summary, position, clubs, characteristics,
-                strengths, weaknesses, estimated_current_form, team,
-                metadata, created_at, updated_at
+            SELECT id, name, summary, metadata, created_at, updated_at
             FROM players
             ORDER BY created_at DESC
             LIMIT %s OFFSET %s;
@@ -417,16 +315,9 @@ async def list_players(limit: int = 50, offset: int = 0):
                 id=row[0],
                 name=row[1],
                 summary=row[2],
-                position=row[3],
-                clubs=row[4],
-                characteristics=row[5],
-                strengths=row[6],
-                weaknesses=row[7],
-                estimated_current_form=row[8],
-                team=row[9],
-                metadata=row[10],
-                created_at=row[11],
-                updated_at=row[12]
+                metadata=row[3],
+                created_at=row[4],
+                updated_at=row[5]
             )
             for row in rows
         ]
