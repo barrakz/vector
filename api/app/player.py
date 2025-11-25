@@ -46,7 +46,13 @@ class PlayerCreateResponse(BaseModel):
     message: str
 
 
-@router.post("/create", response_model=PlayerCreateResponse)
+class PlayerCreateFullResponse(BaseModel):
+    status: str
+    player: PlayerProfileResponse
+    message: str
+
+
+@router.post("/create", response_model=PlayerCreateFullResponse)
 async def create_player(profile: PlayerProfileCreate):
     """
     Utwórz lub zaktualizuj profil piłkarza (UPSERT).
@@ -85,16 +91,32 @@ async def create_player(profile: PlayerProfileCreate):
         player_id = result[0]
         was_inserted = result[1]
         
+        # Pobierz pełny obiekt gracza
+        cursor.execute(
+            "SELECT id, name, summary, metadata, created_at, updated_at FROM players WHERE id = %s",
+            (player_id,)
+        )
+        player_data = cursor.fetchone()
+        
         cursor.close()
         conn.close()
         
         status = "created" if was_inserted else "updated"
         message = f"Profil piłkarza '{profile.name}' został {'utworzony' if was_inserted else 'zaktualizowany'}"
         
+        player_response = PlayerProfileResponse(
+            id=player_data[0],
+            name=player_data[1],
+            summary=player_data[2],
+            metadata=player_data[3],
+            created_at=player_data[4],
+            updated_at=player_data[5]
+        )
+        
         logger.info(f"Player profile {status} successfully with ID: {player_id}")
-        return PlayerCreateResponse(
+        return PlayerCreateFullResponse(
             status=status,
-            player_id=player_id,
+            player=player_response,
             message=message
         )
         

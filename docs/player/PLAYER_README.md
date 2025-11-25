@@ -67,18 +67,22 @@ Usługi:
 ```bash
 curl -X POST http://localhost:5678/webhook/generate-player \
   -H "Content-Type: application/json" \
-  -d '{"name": "Bartosz Kapustka"}'
+  -d '{"name": "Bartosz Kapustka", "club": "Legia Warszawa"}'
 ```
+
+**Parametr `club` jest opcjonalny**, ale zalecany. Jeśli zawodnik nie zostanie znaleziony w Wikipedii, a podano klub, system wygeneruje humorystyczny profil "tajemniczego piłkarza" tego klubu.
 
 **Odpowiedź:**
 ```json
 {
   "status": "created",
-  "profile": {
+  "player": {
+    "id": 1,
     "name": "Bartosz Kapustka",
-    "summary": "Bartosz Kapustka to utalentowany polski pomocnik, który swoją karierę rozpoczynał w Cracovii. Mimo trudności w Leicester City, w Legii Warszawa odbudował swoją pozycję, stając się kluczowym rozgrywającym. Cechuje go świetna technika użytkowa, wizja gry i umiejętność gry kombinacyjnej. Obecnie prezentuje wysoką formę, będąc jednym z liderów Ekstraklasy.",
+    "summary": "Bartosz Kapustka to utalentowany polski pomocnik...",
     "metadata": { ... }
-  }
+  },
+  "message": "Profil piłkarza 'Bartosz Kapustka' został utworzony"
 }
 ```
 
