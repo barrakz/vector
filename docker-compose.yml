@@ -55,6 +55,7 @@ services:
       N8N_HOST: localhost
       N8N_PORT: 5678
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GRILL_ADMIN_TOKEN: ${GRILL_ADMIN_TOKEN:-}
     volumes:
       - n8n_data:/home/node/.n8n
 

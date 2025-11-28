@@ -1,0 +1,250 @@
+{
+    "name": "5. Grill Production Update Player",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "grill-production-update",
+                "options": {},
+                "responseMode": "responseNode"
+            },
+            "id": "webhook-trigger",
+            "name": "Webhook (POST /grill-production-update)",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [460, 460],
+            "webhookId": "grill-production-update-webhook"
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "=https://grillekstraklasa.pl/api/players/?{{ $json.body.slug ? 'slug=' + $json.body.slug : ($json.body.name ? 'name=' + encodeURIComponent($json.body.name) : 'limit=1000') }}",
+                "options": {}
+            },
+            "id": "fetch-production-players",
+            "name": "Fetch Players from Production API",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [680, 460]
+        },
+        {
+            "parameters": {
+                "jsCode": "const response = $input.item.json;\n\nif (!response.results || response.results.length === 0) {\n  return [{\n    json: {\n      found: false,\n      message: 'Player not found on production'\n    }\n  }];\n}\n\n// Return all players as separate items for processing\nreturn response.results.map(player => ({\n  json: {\n    found: true,\n    id: player.id,\n    name: player.name,\n    slug: player.slug,\n    club_name: player.club_name,\n    current_summary: player.summary\n  }\n}));",
+                "mode": "runOnceForAllItems"
+            },
+            "id": "parse-players",
+            "name": "Parse Players",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [900, 460]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {},
+                    "conditions": [
+                        {
+                            "leftValue": "={{ $json.found }}",
+                            "rightValue": true,
+                            "operator": {
+                                "type": "boolean",
+                                "operation": "equals"
+                            }
+                        }
+                    ]
+                }
+            },
+            "id": "if-player-found",
+            "name": "IF Player Found",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [1120, 460]
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "=https://pl.wikipedia.org/w/api.php?action=query&format=json&prop=extracts|pageimages&exintro=1&explaintext=1&titles={{ encodeURIComponent($json.name) }}&piprop=thumbnail&pithumbsize=300",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "User-Agent",
+                            "value": "n8n-player-bot/1.0"
+                        },
+                        {
+                            "name": "Accept",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "wikipedia-search",
+            "name": "Wikipedia Search (PL)",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [1340, 340]
+        },
+        {
+            "parameters": {
+                "jsCode": "const wikiData = $input.item.json;\nconst playerData = $('IF Player Found').item.json;\n\nlet hasData = false;\nlet extract = '';\n\nif (wikiData.query && wikiData.query.pages) {\n  const pages = wikiData.query.pages;\n  const pageId = Object.keys(pages)[0];\n  \n  if (pageId !== '-1') {\n    const page = pages[pageId];\n    extract = page.extract || '';\n    hasData = extract.length > 50;\n  }\n}\n\nreturn {\n  id: playerData.id,\n  name: playerData.name,\n  slug: playerData.slug,\n  club: playerData.club_name,\n  wikipedia_extract: extract,\n  has_wiki_data: hasData\n};",
+                "mode": "runOnceForEachItem"
+            },
+            "id": "process-wiki",
+            "name": "Process Wikipedia Data",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [1560, 340]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "x-goog-api-key",
+                            "value": "={{ $env.GEMINI_API_KEY }}"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "contentType": "json",
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "contents",
+                            "value": "={{ [{ \"parts\": [{ \"text\": `Jesteś ekspertem od piłki nożnej, specjalizującym się w polskiej Ekstraklasie. Twój styl jest humorystyczny, lekko szyderczy i memiczny – możesz żartować z zawodnika w inteligentny, żartobliwy sposób, ale nigdy nie obrażasz ani nie poniżasz. Humor ma być w klimacie polskiej Ekstraklasy: lekkie docinki, zabawne porównania, teksty typu „świetny w grze tyłem do bramki, szkoda że bramka jest z przodu\", podkreślanie memicznych zachowań piłkarzy, ale wszystko z sympatią.\\n\\nZADANIE:\\nNa podstawie poniższych danych z Wikipedii wygeneruj zwięzły, memiczno-ekspercki opis piłkarza (4–5 zdań). Ton może zawierać żartobliwe uwagi o formie, nieskuteczności, chaosie w grze lub nagłych przebłyskach geniuszu – w zależności od tego, co sugerują dane.\\n\\nDANE WEJŚCIOWE:\\n- Nazwa piłkarza: ${$json.name}\\n- Klub: ${$json.club}\\n- Dane z Wikipedii dostępne: ${$json.has_wiki_data}\\n- Tekst z Wikipedii: ${$json.wikipedia_extract}\\n\\nINSTRUKCJE:\\n1. Jeśli has_wiki_data = false i nie znasz tego zawodnika: Wygeneruj humorystyczny, memiczny profil \"tajemniczego piłkarza\" lub \"głębokiej rezerwy\" tego klubu. Wymyśl mu cechy pasujące do anonimowego gracza (np. \"legenda treningów\", \"mistrz gry bez piłki\", \"talent ukryty tak głęboko, że nikt go nie widział\").\\n\\n2. Jeśli masz dane z Wikipedii lub znasz zawodnika: Wygeneruj opis (summary) o długości 4–5 zdań z humorystycznym charakterze.\\n\\nFORMAT ODPOWIEDZI (JSON):\\n{\\n  \"summary\": \"Treść opisu (4–5 zdań)...\"\\n}\\n\\nWAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowego tekstu.` }] }] }}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "gemini-generate",
+            "name": "Generate Summary with Gemini",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [1780, 340]
+        },
+        {
+            "parameters": {
+                "jsCode": "const geminiResponse = $input.item.json;\nconst playerData = $('Process Wikipedia Data').item.json;\n\nlet summary = \"Brak wygenerowanego opisu.\";\n\ntry {\n  if (geminiResponse.candidates && geminiResponse.candidates[0]) {\n    const text = geminiResponse.candidates[0].content.parts[0].text;\n    const jsonText = text.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n    const parsed = JSON.parse(jsonText);\n    summary = parsed.summary || \"Brak opisu.\";\n  }\n} catch (e) {\n  summary = \"Błąd generowania opisu: \" + e.message;\n}\n\nreturn {\n  id: playerData.id,\n  name: playerData.name,\n  slug: playerData.slug,\n  summary: summary\n};",
+                "mode": "runOnceForEachItem"
+            },
+            "id": "parse-gemini",
+            "name": "Parse Gemini Response",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [2000, 340]
+        },
+        {
+            "parameters": {
+                "method": "PATCH",
+                "url": "=https://grillekstraklasa.pl/api/players/{{ $json.slug }}/",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "={{ 'Token ' + $env.GRILL_ADMIN_TOKEN }}"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "contentType": "json",
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "summary",
+                            "value": "={{ $json.summary }}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "update-production",
+            "name": "Update Player on Production",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [2220, 340]
+        },
+        {
+            "parameters": {
+                "jsCode": "const allResults = $input.all();\n\nif (allResults.length === 0) {\n  return [{\n    json: {\n      status: 'success',\n      count: 0,\n      players: []\n    }\n  }];\n}\n\nconst players = allResults.map(item => {\n  const data = item.json;\n  return {\n    name: data.name || 'Unknown',\n    slug: data.slug || 'unknown',\n    summary: data.summary ? (data.summary.length > 100 ? data.summary.substring(0, 100) + '...' : data.summary) : 'No summary'\n  };\n});\n\nreturn [{\n  json: {\n    status: 'success',\n    count: players.length,\n    players\n  }\n}];",
+                "mode": "runOnceForAllItems"
+            },
+            "id": "aggregate-results",
+            "name": "Aggregate Results",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [2440, 340]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ $json }}",
+                "options": {}
+            },
+            "id": "respond-success",
+            "name": "Respond - Success",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [2660, 340]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ { \"status\": \"error\", \"message\": \"Player not found on production API\" } }}",
+                "options": {}
+            },
+            "id": "respond-not-found",
+            "name": "Respond - Not Found",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [1340, 580]
+        }
+    ],
+    "connections": {
+        "Webhook (POST /grill-production-update)": {
+            "main": [[{"node": "Fetch Players from Production API", "type": "main", "index": 0}]]
+        },
+        "Fetch Players from Production API": {
+            "main": [[{"node": "Parse Players", "type": "main", "index": 0}]]
+        },
+        "Parse Players": {
+            "main": [[{"node": "IF Player Found", "type": "main", "index": 0}]]
+        },
+        "IF Player Found": {
+            "main": [
+                [{"node": "Wikipedia Search (PL)", "type": "main", "index": 0}],
+                [{"node": "Respond - Not Found", "type": "main", "index": 0}]
+            ]
+        },
+        "Wikipedia Search (PL)": {
+            "main": [[{"node": "Process Wikipedia Data", "type": "main", "index": 0}]]
+        },
+        "Process Wikipedia Data": {
+            "main": [[{"node": "Generate Summary with Gemini", "type": "main", "index": 0}]]
+        },
+        "Generate Summary with Gemini": {
+            "main": [[{"node": "Parse Gemini Response", "type": "main", "index": 0}]]
+        },
+        "Parse Gemini Response": {
+            "main": [[{"node": "Update Player on Production", "type": "main", "index": 0}]]
+        },
+        "Update Player on Production": {
+            "main": [[{"node": "Aggregate Results", "type": "main", "index": 0}]]
+        },
+        "Aggregate Results": {
+            "main": [[{"node": "Respond - Success", "type": "main", "index": 0}]]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    }
+}
