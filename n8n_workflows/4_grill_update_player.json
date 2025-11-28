@@ -1,0 +1,362 @@
+{
+    "name": "4. Grill Update Player (Postgres + Gemini)",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "grill-update",
+                "options": {},
+                "responseMode": "responseNode"
+            },
+            "id": "webhook-trigger",
+            "name": "Webhook (POST /grill-update)",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                460,
+                460
+            ],
+            "webhookId": "grill-update-webhook"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT p.id, p.name, c.name as club_name FROM players_player p JOIN clubs_club c ON p.club_id = c.id WHERE {{ $json.body.all === true ? '1=1' : ($json.body.name ? \"unaccent(LOWER(p.name)) = unaccent(LOWER('\" + $json.body.name + \"'))\" : ($json.body.club ? \"unaccent(LOWER(c.name)) = unaccent(LOWER('\" + $json.body.club + \"'))\" : '1=0')) }}",
+                "options": {}
+            },
+            "id": "postgres-lookup",
+            "name": "Postgres Lookup",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.4,
+            "position": [
+                680,
+                460
+            ],
+            "credentials": {
+                "postgres": {
+                    "id": "postgres_grill_db",
+                    "name": "Postgres Grill DB"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "// Handle results from Postgres\nconst webhookData = $node[\"Webhook (POST /grill-update)\"].json;\nconst results = $input.all();\n\nif (results.length === 0) {\n  // No players found\n  return [\n    {\n      json: {\n        found: false,\n        name: webhookData.body?.name ?? null,\n        club: webhookData.body?.club ?? null,\n      },\n    },\n  ];\n} else {\n  // Players found - return all of them as separate items\n  return results.map(item => ({\n    json: {\n      found: true,\n      id: item.json.id,\n      name: item.json.name,\n      club_name: item.json.club_name,\n    },\n  }));\n}",
+                "mode": "runOnceForAllItems"
+            },
+            "id": "check-results",
+            "name": "Check Results",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                900,
+                460
+            ],
+            "alwaysOutputData": true,
+            "continueOnFail": false
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {},
+                    "conditions": [
+                        {
+                            "leftValue": "={{ $json.found }}",
+                            "rightValue": true,
+                            "operator": {
+                                "type": "boolean",
+                                "operation": "equals"
+                            }
+                        }
+                    ]
+                }
+            },
+            "id": "if-found",
+            "name": "IF Player Found",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                1120,
+                460
+            ]
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "=https://pl.wikipedia.org/w/api.php?action=query&format=json&prop=extracts|pageimages&exintro=1&explaintext=1&titles={{ encodeURIComponent($json.name) }}&piprop=thumbnail&pithumbsize=300",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "User-Agent",
+                            "value": "n8n-player-bot/1.0"
+                        },
+                        {
+                            "name": "Accept",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "wikipedia-pl",
+            "name": "Wikipedia Search (PL)",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                1340,
+                460
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Extract Wikipedia PL data\nconst wikiData = $input.item.json;\n// Get player data from the IF Player Found node (current item being processed)\nconst playerFromIF = $('IF Player Found').item.json;\n\nlet hasData = false;\nlet extract = '';\nlet thumbnail = '';\n\nif (wikiData.query && wikiData.query.pages) {\n  const pages = wikiData.query.pages;\n  const pageId = Object.keys(pages)[0];\n  \n  if (pageId !== '-1') {\n    const page = pages[pageId];\n    extract = page.extract || '';\n    thumbnail = page.thumbnail ? page.thumbnail.source : '';\n    hasData = extract.length > 50;\n  }\n}\n\nreturn {\n  id: playerFromIF.id,\n  name: playerFromIF.name,\n  club: playerFromIF.club_name,\n  wikipedia_pl_extract: extract,\n  wikipedia_pl_thumbnail: thumbnail,\n  has_pl_data: hasData\n};",
+                "mode": "runOnceForEachItem"
+            },
+            "id": "process-wiki-pl",
+            "name": "Process Wikipedia PL",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1560,
+                460
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "x-goog-api-key",
+                            "value": "={{ $env.GEMINI_API_KEY }}"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "contentType": "json",
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "contents",
+                            "value": "={{ [{ \"parts\": [{ \"text\": `Jesteś ekspertem od piłki nożnej. Wygeneruj krótki, humorystyczny opis (summary) dla piłkarza: ${$json.name} z klubu ${$json.club}. Bazuj na: ${$json.wikipedia_pl_extract}. Jeśli brak danych, zmyśl coś zabawnego pasującego do polskiej ligi. Odpowiedz TYLKO JSONem: { \"summary\": \"...\" }` }] }] }}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "gemini-generate",
+            "name": "Generate Profile with Gemini",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                1780,
+                460
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const geminiResponse = $input.item.json;\nconst player = $('Process Wikipedia PL').item.json;\n\nlet summary = \"Brak opisu.\";\n\ntry {\n  if (geminiResponse.candidates && geminiResponse.candidates[0]) {\n      const text = geminiResponse.candidates[0].content.parts[0].text;\n      const jsonText = text.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n      const parsed = JSON.parse(jsonText);\n      summary = parsed.summary;\n  }\n} catch (e) { \n  summary = \"Błąd generowania opisu.\";\n}\n\n// Escape single quotes for SQL\nconst escapedSummary = summary.replace(/'/g, \"''\");\n\nreturn {\n  id: player.id,\n  name: player.name,\n  summary: escapedSummary\n};",
+                "mode": "runOnceForEachItem"
+            },
+            "id": "parse-gemini",
+            "name": "Parse Gemini Response",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2000,
+                460
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "=UPDATE players_player SET summary = '{{ $json.summary }}' WHERE id = {{ $json.id }}",
+                "options": {}
+            },
+            "id": "postgres-update",
+            "name": "Postgres Update",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.4,
+            "position": [
+                2220,
+                460
+            ],
+            "credentials": {
+                "postgres": {
+                    "id": "postgres_grill_db",
+                    "name": "Postgres Grill DB"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "// Aggregate all results\nconst allResults = $input.all();\n\nif (allResults.length === 0) {\n  return [\n    {\n      json: {\n        status: 'success',\n        count: 0,\n        players: [],\n      },\n    },\n  ];\n}\n\nconst players = allResults.map(item => {\n  const data = item.json;\n  // Unescape the summary (reverse the escaping done in Parse Gemini Response)\n  const summary = data.summary ? data.summary.replace(/''/g, \"'\") : 'No summary';\n  return {\n    name: data.name || 'Unknown',\n    summary: summary.length > 100 ? summary.substring(0, 100) + '...' : summary\n  };\n});\n\nreturn [\n  {\n    json: {\n      status: 'success',\n      count: players.length,\n      players,\n    },\n  },\n];",
+                "mode": "runOnceForAllItems"
+            },
+            "id": "aggregate-results",
+            "name": "Aggregate Results",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2660,
+                460
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ $json }}",
+                "options": {}
+            },
+            "id": "respond-success",
+            "name": "Respond - Success",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                2880,
+                460
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ { \"status\": \"error\", \"message\": \"Player not found in Grill DB\" } }}",
+                "options": {}
+            },
+            "id": "respond-not-found",
+            "name": "Respond - Not Found",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                1340,
+                600
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook (POST /grill-update)": {
+            "main": [
+                [
+                    {
+                        "node": "Postgres Lookup",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Postgres Lookup": {
+            "main": [
+                [
+                    {
+                        "node": "Check Results",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Check Results": {
+            "main": [
+                [
+                    {
+                        "node": "IF Player Found",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "IF Player Found": {
+            "main": [
+                [
+                    {
+                        "node": "Wikipedia Search (PL)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Respond - Not Found",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Wikipedia Search (PL)": {
+            "main": [
+                [
+                    {
+                        "node": "Process Wikipedia PL",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Process Wikipedia PL": {
+            "main": [
+                [
+                    {
+                        "node": "Generate Profile with Gemini",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Profile with Gemini": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Gemini Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Gemini Response": {
+            "main": [
+                [
+                    {
+                        "node": "Postgres Update",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Postgres Update": {
+            "main": [
+                [
+                    {
+                        "node": "Aggregate Results",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Aggregate Results": {
+            "main": [
+                [
+                    {
+                        "node": "Respond - Success",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}
