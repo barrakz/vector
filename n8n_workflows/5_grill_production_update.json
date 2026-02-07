@@ -1,5 +1,6 @@
 {
     "name": "5. Grill Production Update Player",
+    "active": false,
     "nodes": [
         {
             "parameters": {
@@ -18,7 +19,7 @@
         {
             "parameters": {
                 "method": "GET",
-                "url": "=https://grillekstraklasa.pl/api/players/?{{ $json.body.slug ? 'slug=' + $json.body.slug : ($json.body.name ? 'name=' + encodeURIComponent($json.body.name) : 'limit=1000') }}",
+                "url": "={{ $json.body.slug ? 'https://grillekstraklasa.pl/api/players/' + $json.body.slug + '/' : ($json.body.name ? 'https://grillekstraklasa.pl/api/players/?name=' + encodeURIComponent($json.body.name) : 'https://grillekstraklasa.pl/api/players/?limit=1000') }}",
                 "options": {}
             },
             "id": "fetch-production-players",
@@ -29,7 +30,7 @@
         },
         {
             "parameters": {
-                "jsCode": "const response = $input.item.json;\n\nif (!response.results || response.results.length === 0) {\n  return [{\n    json: {\n      found: false,\n      message: 'Player not found on production'\n    }\n  }];\n}\n\n// Return all players as separate items for processing\nreturn response.results.map(player => ({\n  json: {\n    found: true,\n    id: player.id,\n    name: player.name,\n    slug: player.slug,\n    club_name: player.club_name,\n    current_summary: player.summary\n  }\n}));",
+                "jsCode": "const response = ($input.all()[0] || {}).json;\n\n// If we fetched by slug, the Production API returns a single player object.\n// If we fetched by name, it returns { results: [...] }.\nconst players = response && typeof response === 'object'\n  ? (Array.isArray(response.results) ? response.results : (response.slug ? [response] : []))\n  : [];\n\nif (players.length === 0) {\n  return [{\n    json: {\n      found: false,\n      message: 'Player not found on production'\n    }\n  }];\n}\n\n// If name search returned multiple players, require slug to avoid mass-updates.\nif (Array.isArray(response.results) && players.length !== 1) {\n  return [{\n    json: {\n      found: false,\n      message: `Multiple players found (${players.length}). Provide slug to update safely.`\n    }\n  }];\n}\n\nconst player = players[0];\n\nreturn [{\n  json: {\n    found: true,\n    id: player.id,\n    name: player.name,\n    slug: player.slug,\n    club_name: player.club_name,\n    position: player.position,\n    nationality: player.nationality,\n    current_summary: player.summary\n  }\n}];",
                 "mode": "runOnceForAllItems"
             },
             "id": "parse-players",
@@ -83,11 +84,12 @@
             "name": "Wikipedia Search (PL)",
             "type": "n8n-nodes-base.httpRequest",
             "typeVersion": 4.1,
+            "continueOnFail": true,
             "position": [1340, 340]
         },
         {
             "parameters": {
-                "jsCode": "const wikiData = $input.item.json;\nconst playerData = $('IF Player Found').item.json;\n\nlet hasData = false;\nlet extract = '';\n\nif (wikiData.query && wikiData.query.pages) {\n  const pages = wikiData.query.pages;\n  const pageId = Object.keys(pages)[0];\n  \n  if (pageId !== '-1') {\n    const page = pages[pageId];\n    extract = page.extract || '';\n    hasData = extract.length > 50;\n  }\n}\n\nreturn {\n  id: playerData.id,\n  name: playerData.name,\n  slug: playerData.slug,\n  club: playerData.club_name,\n  wikipedia_extract: extract,\n  has_wiki_data: hasData\n};",
+                "jsCode": "const wikiData = $json || {};\nconst playerData = ($node[\"IF Player Found\"] && $node[\"IF Player Found\"].json) ? $node[\"IF Player Found\"].json : {};\n\nlet hasData = false;\nlet extract = '';\n\nif (wikiData.query && wikiData.query.pages) {\n  const pages = wikiData.query.pages;\n  const pageId = Object.keys(pages)[0];\n  \n  if (pageId !== '-1') {\n    const page = pages[pageId];\n    extract = page.extract || '';\n    hasData = extract.length > 50;\n  }\n}\n\nreturn {\n  id: playerData.id,\n  name: playerData.name,\n  slug: playerData.slug,\n  club: playerData.club_name,\n  position: playerData.position,\n  nationality: playerData.nationality,\n  wikipedia_extract: extract,\n  has_wiki_data: hasData\n};",
                 "mode": "runOnceForEachItem"
             },
             "id": "process-wiki",
@@ -129,11 +131,12 @@
             "name": "Generate Summary with Gemini",
             "type": "n8n-nodes-base.httpRequest",
             "typeVersion": 4.1,
+            "continueOnFail": true,
             "position": [1780, 340]
         },
         {
             "parameters": {
-                "jsCode": "const geminiResponse = $input.item.json;\nconst playerData = $('Process Wikipedia Data').item.json;\n\nlet summary = \"Brak wygenerowanego opisu.\";\n\ntry {\n  if (geminiResponse.candidates && geminiResponse.candidates[0]) {\n    const text = geminiResponse.candidates[0].content.parts[0].text;\n    const jsonText = text.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n    const parsed = JSON.parse(jsonText);\n    summary = parsed.summary || \"Brak opisu.\";\n  }\n} catch (e) {\n  summary = \"Błąd generowania opisu: \" + e.message;\n}\n\nreturn {\n  id: playerData.id,\n  name: playerData.name,\n  slug: playerData.slug,\n  summary: summary\n};",
+                "jsCode": "const geminiResponse = $json || {};\nconst playerData = ($node[\"Process Wikipedia Data\"] && $node[\"Process Wikipedia Data\"].json) ? $node[\"Process Wikipedia Data\"].json : {};\n\nfunction fallbackSummary() {\n  const name = playerData.name || 'Ten zawodnik';\n  const club = playerData.club || playerData.club_name || 'tego klubu';\n  const nationality = playerData.nationality ? ` (${playerData.nationality})` : '';\n  const position = playerData.position ? `, pozycja: ${playerData.position}` : '';\n\n  const sentences = [];\n  sentences.push(`${name}${nationality} w barwach ${club}${position} to piłkarz z kategorii: jak już ruszy, to stadion robi oho.`);\n  sentences.push('Potrafi w pół sekundy przejść od co on robi do ok, to było dobre i z powrotem, więc rywale nie są jedynymi, którzy gubią się w jego pomysłach.');\n  sentences.push('Najlepiej czuje się, gdy ma miejsce na przyspieszenie i drybling, bo wtedy jeden ruch potrafi zrobić więcej niż trzy schematy.');\n  sentences.push('A gdy nic nie wychodzi, i tak ma aurę zawodnika, który w 89. minucie przypomni, że jest po to, żeby działo się cokolwiek.');\n  sentences.push('Ekstraklasa lubi takie postacie: nie zawsze jest liczba, ale prawie zawsze jest historia.');\n\n  return sentences.join(' ');\n}\n\nlet summary = '';\n\ntry {\n  if (geminiResponse.candidates && geminiResponse.candidates[0]) {\n    const text = geminiResponse.candidates[0].content.parts[0].text;\n    const jsonText = String(text).replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n    const parsed = JSON.parse(jsonText);\n    summary = parsed.summary || '';\n  }\n} catch (e) {\n  // ignore and fallback\n}\n\nif (!summary || String(summary).trim().length < 20) {\n  summary = fallbackSummary();\n}\n\nreturn {\n  id: playerData.id,\n  name: playerData.name,\n  slug: playerData.slug,\n  summary: summary\n};",
                 "mode": "runOnceForEachItem"
             },
             "id": "parse-gemini",
