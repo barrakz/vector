@@ -90,7 +90,7 @@
         {
             "parameters": {
                 "jsCode": "const wikiData = $json || {};\nconst playerData = ($node[\"IF Player Found\"] && $node[\"IF Player Found\"].json) ? $node[\"IF Player Found\"].json : {};\n\nlet hasData = false;\nlet extract = '';\n\nif (wikiData.query && wikiData.query.pages) {\n  const pages = wikiData.query.pages;\n  const pageId = Object.keys(pages)[0];\n  \n  if (pageId !== '-1') {\n    const page = pages[pageId];\n    extract = page.extract || '';\n    hasData = extract.length > 50;\n  }\n}\n\nreturn {\n  id: playerData.id,\n  name: playerData.name,\n  slug: playerData.slug,\n  club: playerData.club_name,\n  position: playerData.position,\n  nationality: playerData.nationality,\n  wikipedia_extract: extract,\n  has_wiki_data: hasData\n};",
-                "mode": "runOnceForEachItem"
+                "mode": "runOnceForAllItems"
             },
             "id": "process-wiki",
             "name": "Process Wikipedia Data",
@@ -100,8 +100,19 @@
         },
         {
             "parameters": {
+                "jsCode": "const player = $input.first().json || {};\n\nconst models_to_try = [\n  'gemini-2.5-flash-lite-preview-09-2025',\n  'gemini-2.5-flash-preview-09-2025',\n  'gemini-2.0-flash-lite-001',\n  // User requested \"gemini-2.0-flash/\"; normalize trailing slash.\n  'gemini-2.0-flash',\n];\n\nreturn models_to_try.map(model => ({\n  json: {\n    ...player,\n    model,\n  }\n}));",
+                "mode": "runOnceForAllItems"
+            },
+            "id": "prepare-gemini-attempts",
+            "name": "Prepare Gemini Attempts",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [1780, 340]
+        },
+        {
+            "parameters": {
                 "method": "POST",
-                "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+                "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $json.model }}:generateContent",
                 "sendHeaders": true,
                 "headerParameters": {
                     "parameters": [
@@ -121,18 +132,29 @@
                     "parameters": [
                         {
                             "name": "contents",
-                            "value": "={{ [{ \"parts\": [{ \"text\": `Jesteś ekspertem od piłki nożnej, specjalizującym się w polskiej Ekstraklasie. Twój styl jest humorystyczny, lekko szyderczy i memiczny – możesz żartować z zawodnika w inteligentny, żartobliwy sposób, ale nigdy nie obrażasz ani nie poniżasz. Humor ma być w klimacie polskiej Ekstraklasy: lekkie docinki, zabawne porównania, teksty typu „świetny w grze tyłem do bramki, szkoda że bramka jest z przodu\", podkreślanie memicznych zachowań piłkarzy, ale wszystko z sympatią.\\n\\nZADANIE:\\nNa podstawie poniższych danych z Wikipedii wygeneruj zwięzły, memiczno-ekspercki opis piłkarza (4–5 zdań). Ton może zawierać żartobliwe uwagi o formie, nieskuteczności, chaosie w grze lub nagłych przebłyskach geniuszu – w zależności od tego, co sugerują dane.\\n\\nDANE WEJŚCIOWE:\\n- Nazwa piłkarza: ${$json.name}\\n- Klub: ${$json.club}\\n- Dane z Wikipedii dostępne: ${$json.has_wiki_data}\\n- Tekst z Wikipedii: ${$json.wikipedia_extract}\\n\\nINSTRUKCJE:\\n1. Jeśli has_wiki_data = false i nie znasz tego zawodnika: Wygeneruj humorystyczny, memiczny profil \"tajemniczego piłkarza\" lub \"głębokiej rezerwy\" tego klubu. Wymyśl mu cechy pasujące do anonimowego gracza (np. \"legenda treningów\", \"mistrz gry bez piłki\", \"talent ukryty tak głęboko, że nikt go nie widział\").\\n\\n2. Jeśli masz dane z Wikipedii lub znasz zawodnika: Wygeneruj opis (summary) o długości 4–5 zdań z humorystycznym charakterze.\\n\\nFORMAT ODPOWIEDZI (JSON):\\n{\\n  \"summary\": \"Treść opisu (4–5 zdań)...\"\\n}\\n\\nWAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowego tekstu.` }] }] }}"
+                            "value": "={{ [{ \"parts\": [{ \"text\": `Jesteś ekspertem od piłki nożnej, specjalizującym się w polskiej Ekstraklasie. Twój styl jest humorystyczny, lekko szyderczy i memiczny – możesz żartować z zawodnika w inteligentny, żartobliwy sposób, ale nigdy nie obrażasz ani nie poniżasz. Humor ma być w klimacie polskiej Ekstraklasy: lekkie docinki, zabawne porównania, teksty typu „świetny w grze tyłem do bramki, szkoda że bramka jest z przodu\", podkreślanie memicznych zachowań piłkarzy, ale wszystko z sympatią.\\n\\nZADANIE:\\nNa podstawie poniższych danych wygeneruj zwięzły, memiczno-ekspercki opis piłkarza (4–5 zdań).\\n\\nDANE WEJŚCIOWE:\\n- Nazwa piłkarza: ${$json.name}\\n- Klub: ${$json.club}\\n- Pozycja: ${$json.position}\\n- Narodowość: ${$json.nationality}\\n- Dane z Wikipedii dostępne: ${$json.has_wiki_data}\\n- Tekst z Wikipedii: ${$json.wikipedia_extract}\\n\\nINSTRUKCJE:\\n1. Jeśli has_wiki_data = false i nie znasz tego zawodnika: Wygeneruj humorystyczny, memiczny profil \\\"tajemniczego piłkarza\\\" lub \\\"głębokiej rezerwy\\\" tego klubu.\\n2. Jeśli masz dane z Wikipedii lub znasz zawodnika: Wygeneruj opis (summary) o długości 4–5 zdań z humorystycznym charakterze.\\n\\nFORMAT ODPOWIEDZI (JSON):\\n{\\n  \\\"summary\\\": \\\"Treść opisu (4–5 zdań)...\\\"\\n}\\n\\nWAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowego tekstu.` }] }] }}"
                         }
                     ]
                 },
                 "options": {}
             },
             "id": "gemini-generate",
-            "name": "Generate Summary with Gemini",
+            "name": "Gemini Generate (Try Models)",
             "type": "n8n-nodes-base.httpRequest",
             "typeVersion": 4.1,
             "continueOnFail": true,
-            "position": [1780, 340]
+            "position": [2000, 340]
+        },
+        {
+            "parameters": {
+                "jsCode": "const attempts = $items('Prepare Gemini Attempts');\nconst modelsTried = attempts.map(a => a.json.model);\nconst results = $input.all();\n\nconst errors = [];\n\nfor (let i = 0; i < results.length; i++) {\n  const model = (attempts[i] && attempts[i].json && attempts[i].json.model) ? attempts[i].json.model : null;\n  const r = results[i] || {};\n  const j = r.json || {};\n\n  if (j && j.candidates && j.candidates[0]) {\n    return [{\n      json: {\n        ...j,\n        model_used: model,\n        models_tried: modelsTried,\n      }\n    }];\n  }\n\n  // Try to capture some useful info about failures without dumping huge bodies.\n  const msg = (j && (j.message || j.error || j.description)) ? (j.message || j.error || j.description) : null;\n  errors.push({ model, hasCandidates: !!j.candidates, message: msg });\n}\n\nreturn [{\n  json: {\n    model_used: null,\n    models_tried: modelsTried,\n    errors,\n  }\n}];",
+                "mode": "runOnceForAllItems"
+            },
+            "id": "select-gemini-result",
+            "name": "Select Gemini Result",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [2220, 340]
         },
         {
             "parameters": {
@@ -143,7 +165,7 @@
             "name": "Parse Gemini Response",
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
-            "position": [2000, 340]
+            "position": [2440, 340]
         },
         {
             "parameters": {
@@ -174,18 +196,18 @@
             "name": "Update Player on Production",
             "type": "n8n-nodes-base.httpRequest",
             "typeVersion": 4.1,
-            "position": [2220, 340]
+            "position": [2660, 340]
         },
         {
             "parameters": {
-                "jsCode": "const allResults = $input.all();\n\nif (allResults.length === 0) {\n  return [{\n    json: {\n      status: 'success',\n      count: 0,\n      players: []\n    }\n  }];\n}\n\nconst players = allResults.map(item => {\n  const data = item.json;\n  return {\n    name: data.name || 'Unknown',\n    slug: data.slug || 'unknown',\n    summary: data.summary ? (data.summary.length > 100 ? data.summary.substring(0, 100) + '...' : data.summary) : 'No summary'\n  };\n});\n\nreturn [{\n  json: {\n    status: 'success',\n    count: players.length,\n    players\n  }\n}];",
+                "jsCode": "const allResults = $input.all();\nconst modelUsed = (($items('Select Gemini Result')[0] || {}).json || {}).model_used || null;\n\nif (allResults.length === 0) {\n  return [{\n    json: {\n      status: 'success',\n      model_used: modelUsed,\n      count: 0,\n      players: []\n    }\n  }];\n}\n\nconst players = allResults.map(item => {\n  const data = item.json;\n  return {\n    name: data.name || 'Unknown',\n    slug: data.slug || 'unknown',\n    model_used: modelUsed,\n    summary: data.summary ? (data.summary.length > 100 ? data.summary.substring(0, 100) + '...' : data.summary) : 'No summary'\n  };\n});\n\nreturn [{\n  json: {\n    status: 'success',\n    model_used: modelUsed,\n    count: players.length,\n    players\n  }\n}];",
                 "mode": "runOnceForAllItems"
             },
             "id": "aggregate-results",
             "name": "Aggregate Results",
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
-            "position": [2440, 340]
+            "position": [2880, 340]
         },
         {
             "parameters": {
@@ -197,7 +219,7 @@
             "name": "Respond - Success",
             "type": "n8n-nodes-base.respondToWebhook",
             "typeVersion": 1,
-            "position": [2660, 340]
+            "position": [3100, 340]
         },
         {
             "parameters": {
@@ -232,9 +254,15 @@
             "main": [[{"node": "Process Wikipedia Data", "type": "main", "index": 0}]]
         },
         "Process Wikipedia Data": {
-            "main": [[{"node": "Generate Summary with Gemini", "type": "main", "index": 0}]]
+            "main": [[{"node": "Prepare Gemini Attempts", "type": "main", "index": 0}]]
         },
-        "Generate Summary with Gemini": {
+        "Prepare Gemini Attempts": {
+            "main": [[{"node": "Gemini Generate (Try Models)", "type": "main", "index": 0}]]
+        },
+        "Gemini Generate (Try Models)": {
+            "main": [[{"node": "Select Gemini Result", "type": "main", "index": 0}]]
+        },
+        "Select Gemini Result": {
             "main": [[{"node": "Parse Gemini Response", "type": "main", "index": 0}]]
         },
         "Parse Gemini Response": {
